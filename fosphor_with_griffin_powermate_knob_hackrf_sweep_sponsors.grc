@@ -1,0 +1,179 @@
+options:
+  parameters:
+    author: ''
+    category: '[GRC Hier Blocks]'
+    cmake_opt: ''
+    comment: ''
+    copyright: ''
+    description: ''
+    gen_cmake: 'On'
+    gen_linking: dynamic
+    generate_options: qt_gui
+    hier_block_src_path: '.:'
+    id: fosphor_knob_hackrf_sweep_sponsors
+    max_nouts: '0'
+    output_language: python
+    placement: (0,0)
+    qt_qss_theme: ''
+    realtime_scheduling: ''
+    run: 'True'
+    run_command: '{python} -u {filename}'
+    run_options: prompt
+    sizing_mode: fixed
+    thread_safe_setters: ''
+    title: ''
+    window_size: 4000,4000
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [8, 8]
+    rotation: 0
+    state: enabled
+
+blocks:
+- name: freq
+  id: variable
+  parameters:
+    comment: ''
+    value: 3625e6
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [384, 12]
+    rotation: 0
+    state: enabled
+- name: samp_rate
+  id: variable
+  parameters:
+    comment: ''
+    value: 7250e6
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [176, 12]
+    rotation: 0
+    state: enabled
+- name: blocks_add_xx_0
+  id: blocks_add_xx
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    num_inputs: '2'
+    type: complex
+    vlen: '1'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [488, 344]
+    rotation: 0
+    state: enabled
+- name: blocks_file_source_0
+  id: blocks_file_source
+  parameters:
+    affinity: ''
+    alias: ''
+    begin_tag: pmt.PMT_NIL
+    comment: ''
+    file: /dev/shm/hackrf_sweep
+    length: '0'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    offset: '0'
+    repeat: 'True'
+    type: complex
+    vlen: '1'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [80, 276.0]
+    rotation: 0
+    state: true
+- name: fosphor_glfw_sink_c_0
+  id: fosphor_glfw_sink_c
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    freq_center: freq
+    freq_span: samp_rate
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    wintype: window.WIN_BLACKMAN_hARRIS
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [600, 348]
+    rotation: 0
+    state: enabled
+- name: paint_image_source_0
+  id: paint_image_source
+  parameters:
+    affinity: ''
+    alias: ''
+    autocontrast: '1'
+    bt709_map: '0'
+    comment: ''
+    image_file: /usr/share/fosphor_knob/scrolly.png
+    image_flip: '1'
+    image_invert: '1'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    repeatmode: '1'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [32, 404]
+    rotation: 0
+    state: enabled
+- name: paint_paint_bc_0
+  id: paint_paint_bc
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    equalization: EQUALIZATION_OFF
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    randomsrc: INTERNAL
+    repeats: '1'
+    width: '1080'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [72, 572]
+    rotation: 0
+    state: enabled
+- name: xmlrpc_server_0
+  id: xmlrpc_server
+  parameters:
+    addr: 0.0.0.0
+    alias: ''
+    comment: ''
+    port: '8080'
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [272, 12]
+    rotation: 0
+    state: enabled
+
+connections:
+- [blocks_add_xx_0, '0', fosphor_glfw_sink_c_0, '0']
+- [blocks_file_source_0, '0', blocks_add_xx_0, '0']
+- [paint_image_source_0, '0', paint_paint_bc_0, '0']
+- [paint_paint_bc_0, '0', blocks_add_xx_0, '1']
+
+metadata:
+  file_format: 1
