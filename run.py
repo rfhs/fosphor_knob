@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 from powermate import PowerMateBase, LedEvent, MAX_BRIGHTNESS
 import glob
-import telnetlib
 import subprocess
 import os
 try:
