@@ -53,5 +53,8 @@ else
   wmctrl -F -r "Fosphor Knob" -e 0,0,0,160,0
   wmctrl -F -a "Fosphor Knob"
 fi
+if [ -x '/usr/bin/xtrlock' ]; then
+  xtrlock
+fi
 wait ${pids}
 exit 0
