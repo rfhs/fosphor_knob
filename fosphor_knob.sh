@@ -88,17 +88,9 @@ wmctrl -F -r "fosphor" -e 0,0,0,0,0
 wmctrl -F -a "fosphor" -b add,maximized_vert,maximized_horz
 wmctrl -F -a "fosphor"
 
-if [ "$(basename ${0})" = "fosphor_knob_sponsors" ]; then
-  wmctrl -F -r "Fosphor Knob Sponsors" -e 0,0,0,160,0
-  wmctrl -F -a "Fosphor Knob Sponsors"
-elif [ "$(basename ${0})" = "fosphor_knob_hackrf_sweep" ]; then
-  #wmctrl -F -r "Fosphor HackRF Sweep" -e 0,0,0,160,0
-  #wmctrl -F -a "Fosphor HackRF Sweep"
-  true
-else
-  wmctrl -F -r "Fosphor Knob" -e 0,0,0,160,0
-  wmctrl -F -a "Fosphor Knob"
-fi
+wmctrl -r "Fosphor Knob" -e 0,0,0,160,0
+wmctrl -a "Fosphor Knob"
+
 if [ -x '/usr/bin/xtrlock' ]; then
   xtrlock
 fi
