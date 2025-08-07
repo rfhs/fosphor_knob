@@ -128,7 +128,7 @@ blocks:
     alias: ''
     comment: ''
     ignoretag: 'True'
-    limit: time
+    limit: auto
     maximum: '0.01'
     maxoutbuf: '0'
     minoutbuf: '0'
