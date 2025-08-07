@@ -128,8 +128,8 @@ blocks:
     alias: ''
     comment: ''
     ignoretag: 'True'
-    limit: time
-    maximum: '0.1'
+    limit: items
+    maximum: '0.01'
     maxoutbuf: '0'
     minoutbuf: '0'
     samples_per_second: samp_rate/100
