@@ -15,24 +15,66 @@ control_c() {
 trap control_c INT
 trap control_c TERM
 
-if [ "$(basename ${0})" = "fosphor_knob_sponsors" ]; then
-  /usr/share/fosphor_knob/fosphor_knob_sponsors.py &
-  pids=$!
-elif [ "$(basename ${0})" = "fosphor_knob_hackrf_sweep" ]; then
+hackrf_common() {
   mkfifo /dev/shm/hackrf_sweep
   hackrf_sweep -I -a0 -f0:7250 -l 40 -g 56 -r /dev/shm/hackrf_sweep &
   pids=$!
+}
+
+hackrf_sweep() {
+  hackrf_common
   /usr/share/fosphor_knob/fosphor_knob_hackrf_sweep.py &
   pids="${pids} $!"
-elif [ "$(basename ${0})" = "fosphor_knob_hackrf_sweep_sponsors" ]; then
-  mkfifo /dev/shm/hackrf_sweep
-  hackrf_sweep -I -a0 -f0:7250 -l 40 -g 56 -r /dev/shm/hackrf_sweep &
-  pids=$!
+}
+
+hackrf_sweep_sponsors() {
+  hackrf_common
   /usr/share/fosphor_knob/fosphor_knob_hackrf_sweep_sponsors.py &
   pids="${pids} $!"
-else
-  /usr/share/fosphor_knob/fosphor_knob.py &
+}
+
+uhd() {
+  /usr/share/fosphor_knob/fosphor_knob_uhd.py &
   pids=$!
+}
+
+uhd_sponsors() {
+  /usr/share/fosphor_knob/fosphor_knob_uhd_sponsors.py &
+  pids=$!
+}
+
+bladerf2() {
+}
+
+bladerf2_sponsors() {
+}
+
+pids=""
+
+if [ "$(basename ${0})" = "fosphor_knob_uhd" ]; then
+  uhd
+elif [ "$(basename ${0})" = "fosphor_knob_uhd_sponsors" ]; then
+  uhd_sponsors
+elif [ "$(basename ${0})" = "fosphor_knob_hackrf_sweep" ]; then
+  hackrf_sweep
+elif [ "$(basename ${0})" = "fosphor_knob_hackrf_sweep_sponsors" ]; then
+  hackrf_sweep_sponsors
+elif [ "$(basename ${0})" = "fosphor_knob_sponsors" ]; then
+  if [ -n "$(lsusb -d 2500:0022)" ]; then
+    uhd_sponsors
+  elif [ -n "$(lsusb -d 2cf0:5250)" ]; then
+    bladerf2_sponsors
+  elif [ -d "$(lsusb -d 1d50:6089)" ]; then
+    hackrf_sweep_sponsors
+  fi
+else
+  if [ -n "$(lsusb -d 2500:0022)" ]; then
+    uhd
+  elif [ -n "$(lsusb -d 2cf0:5250)" ]; then
+    bladerf2
+  elif [ -d "$(lsusb -d 1d50:6089)" ]; then
+    hackrf_sweep
+  fi
 fi
 
 /usr/share/fosphor_knob/run.py &
