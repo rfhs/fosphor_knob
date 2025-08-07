@@ -44,9 +44,13 @@ uhd_sponsors() {
 }
 
 bladerf2() {
+  /usr/share/fosphor_knob/fosphor_knob_bladerf2.py &
+  pids=$!
 }
 
 bladerf2_sponsors() {
+  /usr/share/fosphor_knob/fosphor_knob_bladerf2_sponsors.py &
+  pids=$!
 }
 
 pids=""
