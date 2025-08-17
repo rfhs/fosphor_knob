@@ -19,7 +19,7 @@ presets = [140, 433, 915, 1950, 2134, 2424]
 pos = 0
 currentFreq = -1
 step = 1000000
-int currentGain = -1
+currentGain = -1
 
 
 def setFreq(freq1):
@@ -43,7 +43,7 @@ def getGain():
 
 
 def setGain(gain1):
-    gain = float(gain1)
+    gain = int(gain1)
     xml = xmlrpc.client.Server('http://' + targetip + ':8080')
     xml.set_gain(gain)
 
