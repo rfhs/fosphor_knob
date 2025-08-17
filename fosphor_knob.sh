@@ -64,7 +64,7 @@ elif [ "$(basename ${0})" = "fosphor_knob_hackrf_sweep" ]; then
 elif [ "$(basename ${0})" = "fosphor_knob_hackrf_sweep_sponsors" ]; then
   hackrf_sweep_sponsors
 elif [ "$(basename ${0})" = "fosphor_knob_sponsors" ]; then
-  if [ -n "$(lsusb -d 2500:0022)" ]; then
+  if [ -n "$(lsusb -d 2500:0022)" ] || [ -n "$(lsusb -d 2500:0021)" ]; then
     uhd_sponsors
   elif [ -n "$(lsusb -d 2cf0:5250)" ]; then
     bladerf2_sponsors
@@ -72,7 +72,7 @@ elif [ "$(basename ${0})" = "fosphor_knob_sponsors" ]; then
     hackrf_sweep_sponsors
   fi
 else
-  if [ -n "$(lsusb -d 2500:0022)" ]; then
+  if [ -n "$(lsusb -d 2500:0022)" ] || [ -n "$(lsusb -d 2500:0021)" ]; then
     uhd
   elif [ -n "$(lsusb -d 2cf0:5250)" ]; then
     bladerf2
