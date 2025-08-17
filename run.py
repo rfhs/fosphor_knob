@@ -1,17 +1,11 @@
 #!/usr/bin/env python
 from powermate import PowerMateBase, LedEvent, MAX_BRIGHTNESS
 import glob
-import subprocess
-import os
-try:
-    import xmlrpclib
-except ImportError:
-    import xmlrpc
-    import xmlrpc.client
 import time
-import sys
+import xmlrpc
+import xmlrpc.client
 
-debugMode = 1
+debugMode = 0
 currentMode = "OFF"
 targetip = "127.0.0.1"
 
@@ -23,30 +17,36 @@ presets = [750, 877, 915, 1950, 2134, 2424, 2530]
 presets = [140, 433, 915, 1950, 2134, 2424]
 
 pos = 0
-currentFreq = 855000000
+currentFreq = -1
 step = 1000000
-currentGain = 32
+currentGain = -1
+
 
 def setFreq(freq1):
     freq = float(freq1)
-    try:
-        xml = xmlrpclib.Server('http://' + targetip + ':8080');
-    except NameError:
-        xml = xmlrpc.client.Server('http://' + targetip + ':8080');
+    xml = xmlrpc.client.Server('http://' + targetip + ':8080')
     xml.set_freq(freq)
-    try:
-        xml2 = xmlrpclib.Server('http://' + targetip + ':8080');
-    except NameError:
-        xml2 = xmlrpc.client.Server('http://' + targetip + ':8080');
-    xml2.set_freq(freq)
+
+
+def getFreq():
+    global currentFreq
+    xml = xmlrpc.client.Server('http://' + targetip + ':8080')
+    currentFreq = int(xml.get_freq())
+    print("Found initial freq %s" % currentFreq)
+
+
+def getGain():
+    global currentGain
+    xml = xmlrpc.client.Server('http://' + targetip + ':8080')
+    currentGain = int(xml.get_gain())
+    print("Found gain %s" % currentGain)
+
 
 def setGain(gain1):
     gain = float(gain1)
-    try:
-        xml = xmlrpclib.Server('http://' + targetip + ':8080');
-    except NameError:
-        xml = xmlrpc.client.Server('http://' + targetip + ':8080');
+    xml = xmlrpc.client.Server('http://' + targetip + ':8080')
     xml.set_gain(gain)
+
 
 def incGain():
     global currentGain
@@ -56,6 +56,7 @@ def incGain():
     print("setting Gain %s" % currentGain)
     setGain(currentGain)
 
+
 def decGain():
     global currentGain
     currentGain -= 1
@@ -64,11 +65,13 @@ def decGain():
     print("setting Gain %s" % currentGain)
     setGain(currentGain)
 
+
 def incfreq():
     global currentFreq
     currentFreq += step
     print("setting freq %s" % currentFreq)
     setFreq(currentFreq)
+
 
 def decfreq():
     global currentFreq
@@ -76,13 +79,13 @@ def decfreq():
     print("setting freq %s" % currentFreq)
     setFreq(currentFreq)
 
+
 def preset():
-    global presets
     global pos
     global currentFreq
 
     pos += 1
-    
+
     if pos >= len(presets):
         pos = 0
 
@@ -90,47 +93,68 @@ def preset():
     currentFreq = preset_freq*1000000
     setFreq(preset_freq*1000000)
 
+
+def wait_for_getFreq():
+    max_time = 19
+    while 1:
+        if (max_time < 0):
+            print("Gave up waiting for xmlrpc startup")
+            exit(1)
+        try:
+            getFreq()
+            print("We get signal")
+            break
+        except:
+            print("Waiting for xmlrpc startup... %s" % max_time)
+            time.sleep(1)
+            max_time = max_time - 1
+
+
 class ExamplePowerMate(PowerMateBase):
-  def __init__(self, path):
-    super(ExamplePowerMate, self).__init__(path)
-    self._pulsing = False
-    self._brightness = MAX_BRIGHTNESS
+    def __init__(self, path):
+        wait_for_getFreq()
+        getGain()
+        super(ExamplePowerMate, self).__init__(path)
+        self._pulsing = False
+        self._brightness = MAX_BRIGHTNESS
 
-  def short_press(self):
-    print('Short press!')
-    preset()
-    self._pulsing = not self._pulsing
-    print(self._pulsing)
-    if self._pulsing:
-      return LedEvent.pulse()
-    else:
-      return LedEvent(brightness=self._brightness)
+    def short_press(self):
+        print('Short press!')
+        preset()
+        self._pulsing = not self._pulsing
+        print(self._pulsing)
+        if self._pulsing:
+            return LedEvent.pulse()
+        else:
+            return LedEvent(brightness=self._brightness)
 
-  def long_press(self):
-    print('Long press!')
+    def long_press(self):
+        print('Long press!')
 
-  def rotate(self, rotation):
-    if rotation == 1:
-      incfreq()
-    elif rotation == -1:
-      decfreq()
+    def rotate(self, rotation):
+        if rotation == 1:
+            incfreq()
+        elif rotation == -1:
+            decfreq()
 
-    print('Rotate {}!'.format(rotation))
-    self._brightness = max(0, min(MAX_BRIGHTNESS, self._brightness + rotation))
-    self._pulsing = False
-    return LedEvent(brightness=self._brightness)
+        print('Rotate {}!'.format(rotation))
+        self._brightness = \
+            max(0, min(MAX_BRIGHTNESS, self._brightness + rotation))
+        self._pulsing = False
+        return LedEvent(brightness=self._brightness)
 
-  def push_rotate(self, rotation):
-    if rotation == 1:
-      incGain()
-      print("push rotate")
+    def push_rotate(self, rotation):
+        if rotation == 1:
+            incGain()
+            print("push rotate")
 
-    elif rotation == -1:
-      decGain()
-      print("push rotate")
+        elif rotation == -1:
+            decGain()
+            print("push rotate")
 
-    print('Push rotate {}!'.format(rotation))
+        print('Push rotate {}!'.format(rotation))
+
 
 if __name__ == '__main__':
-  pm = ExamplePowerMate(glob.glob('/dev/input/by-id/*PowerMate*')[0])
-  pm.run()
+    pm = ExamplePowerMate(glob.glob('/dev/input/by-id/*PowerMate*')[0])
+    pm.run()

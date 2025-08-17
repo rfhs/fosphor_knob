@@ -63,6 +63,10 @@ elif [ "$(basename ${0})" = "fosphor_knob_hackrf_sweep" ]; then
   hackrf_sweep
 elif [ "$(basename ${0})" = "fosphor_knob_hackrf_sweep_sponsors" ]; then
   hackrf_sweep_sponsors
+elif [ "$(basename ${0})" = "fosphor_knob_bladerf_sweep" ]; then
+  bladerf2
+elif [ "$(basename ${0})" = "fosphor_knob_bladerf_sweep_sponsors" ]; then
+  bladerf2_sponsors
 elif [ "$(basename ${0})" = "fosphor_knob_sponsors" ]; then
   if [ -n "$(lsusb -d 2500:0022)" ] || [ -n "$(lsusb -d 2500:0021)" ]; then
     uhd_sponsors
@@ -70,6 +74,9 @@ elif [ "$(basename ${0})" = "fosphor_knob_sponsors" ]; then
     bladerf2_sponsors
   elif [ -d "$(lsusb -d 1d50:6089)" ]; then
     hackrf_sweep_sponsors
+  else
+    printf 'Failed to autodetect supported hardware\n'
+    exit 1
   fi
 else
   if [ -n "$(lsusb -d 2500:0022)" ] || [ -n "$(lsusb -d 2500:0021)" ]; then
@@ -78,6 +85,9 @@ else
     bladerf2
   elif [ -d "$(lsusb -d 1d50:6089)" ]; then
     hackrf_sweep
+  else
+    printf 'Failed to autodetect supported hardware\n'
+    exit 1
   fi
 fi
 
@@ -88,7 +98,7 @@ wmctrl -F -r "fosphor" -e 0,0,0,0,0
 wmctrl -F -a "fosphor" -b add,maximized_vert,maximized_horz
 wmctrl -F -a "fosphor"
 
-wmctrl -r "Fosphor Knob" -e 0,0,0,160,0
+wmctrl -r "Fosphor Knob" -e 0,0,0,200,0
 wmctrl -a "Fosphor Knob"
 
 if [ -x '/usr/bin/xtrlock' ]; then
