@@ -71,6 +71,7 @@ def incfreq():
     currentFreq += step
     print("setting freq %s" % currentFreq)
     setFreq(currentFreq)
+    getFreq()
 
 
 def decfreq():
@@ -78,6 +79,7 @@ def decfreq():
     currentFreq -= step
     print("setting freq %s" % currentFreq)
     setFreq(currentFreq)
+    getFreq()
 
 
 def preset():
