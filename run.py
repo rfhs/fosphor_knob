@@ -14,7 +14,7 @@ Edit the presets to values in MHz.
 Example:
 presets = [750, 877, 915, 1950, 2134, 2424, 2530]
 '''
-presets = [140, 433, 915, 1950, 2134, 2424]
+presets = [140, 433, 915, 1950, 2134, 2424, 5160]
 
 pos = 0
 currentFreq = -1
