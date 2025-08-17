@@ -45,7 +45,7 @@ def getGain():
 def setGain(gain1):
     gain = int(gain1)
     xml = xmlrpc.client.Server('http://' + targetip + ':8080')
-    xml.set_gain(gain)
+    xml.set_gain(float(gain))
 
 
 def incGain():
