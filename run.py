@@ -19,7 +19,7 @@ presets = [140, 433, 915, 1950, 2134, 2424]
 pos = 0
 currentFreq = -1
 step = 1000000
-currentGain = -1
+int currentGain = -1
 
 
 def setFreq(freq1):
