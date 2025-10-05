@@ -84,6 +84,9 @@ else
     exec_bladerf2
   elif [ -n "$(lsusb -d 1d50:6089)" ]; then
     exec_hackrf_sweep
+  else
+    printf 'Failed to autodetect supported hardware\n'
+    exit 1
   fi
 fi
 
