@@ -1,5 +1,6 @@
 #!/bin/sh
 
+#shellcheck disable=2329
 control_c() {
   # shellcheck disable=2317
   if [ -n "${pids}" ]; then
@@ -99,6 +100,10 @@ wmctrl -F -a "fosphor"
 
 wmctrl -r "Fosphor Knob" -e 0,0,0,200,0
 wmctrl -a "Fosphor Knob"
+
+# We are using xtrlock for security, inhibit the screensaver
+/usr/share/fosphor_knob/nosleep.sh &
+pids="${pids} $!"
 
 if [ -x '/usr/bin/xtrlock' ]; then
   xtrlock
