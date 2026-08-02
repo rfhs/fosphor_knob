@@ -98,7 +98,7 @@ wmctrl -F -r "fosphor" -e 0,0,0,0,0
 wmctrl -F -a "fosphor" -b add,maximized_vert,maximized_horz
 wmctrl -F -a "fosphor"
 
-wmctrl -r "Fosphor Knob" -e 0,0,0,200,0
+wmctrl -r "Fosphor Knob" -e 0,0,0,320,0
 wmctrl -a "Fosphor Knob"
 
 # We are using xtrlock for security, inhibit the screensaver
