@@ -1,0 +1,6 @@
+dependencies:
+  idf: ">=5.5"
+  espressif/tinyusb: "~0.21.0"
+  espressif/esp_lcd_st77916: "~2.0.2"
+  espressif/esp_lvgl_port: "~2.9.0"
+  lvgl/lvgl: "~9.5.0"

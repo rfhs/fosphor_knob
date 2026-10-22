@@ -1,0 +1,49 @@
+CONFIG_IDF_TARGET="esp32s3"
+
+# Waveshare ESP32-S3-Knob-Touch-LCD-1.8: ESP32-S3R8, 16 MB flash
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+
+# 1 ms ticks: the encoder samples its lines once per tick
+CONFIG_FREERTOS_HZ=1000
+
+# Logs go to USB-Serial-JTAG (visible only until USB is taken over by the
+# PowerMate emulation). UART0 is wired to the board's second ESP32, keep it quiet.
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
+
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
+
+# 8 MB octal PSRAM in the ESP32-S3R8: holds the LED glow image and LVGL's heap
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+
+# LVGL
+CONFIG_LV_COLOR_DEPTH_16=y
+CONFIG_LV_USE_CLIB_MALLOC=y
+CONFIG_LV_USE_CLIB_STRING=y
+CONFIG_LV_USE_CLIB_SPRINTF=y
+CONFIG_LV_DEF_REFR_PERIOD=20
+# lv_snapshot_take() in ui.c: screenshots over USB
+CONFIG_LV_USE_SNAPSHOT=y
+
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+
+# The UI build-up runs on the main task
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# There is no console once USB belongs to the PowerMate, so crashes are
+# saved to flash; read them with: tools/pmknob.py reboot --bootloader, then
+# idf.py coredump-info
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
+
+# USB symbol for the "flip the plug" hint
+CONFIG_LV_FONT_MONTSERRAT_32=y
+
+# Dynamic frequency scaling (80-240 MHz), set up in main.c
+CONFIG_PM_ENABLE=y

@@ -1,0 +1,39 @@
+# Checks the host side: the knob tools, the shell scripts and the udev
+# rules. Tests that need a knob plugged in are run by hand:
+# firmware/tools/selftest.py (see "Testing" in firmware/README.md).
+name: host
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Least privilege by default; jobs that need more ask for it.
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: pip install pyusb
+
+      - name: Compile all Python
+        run: python -m compileall -q .
+
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+
+      - name: shellcheck
+        run: shellcheck fosphor_knob.sh nosleep.sh firmware/secondary/flash.sh
+
+      - name: udev rules
+        run: udevadm verify udev/*.rules

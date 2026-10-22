@@ -1,0 +1,22 @@
+# fosphor_knob: use the knobs without root.
+#
+#   sudo mkdir -p /etc/udev/rules.d
+#   sudo cp udev/99-fosphor-knob.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload && sudo udevadm trigger
+#
+# then unplug and replug the knobs. Access goes to the 'plugdev' group (be a
+# member, or change it to a group you are in) and, through 'uaccess', to
+# whoever is logged in at the machine.
+
+# Griffin PowerMate and the Waveshare knob's PowerMate emulator (077d:0410).
+# The input event node: run.py and the tests.
+SUBSYSTEM=="input", ATTRS{idVendor}=="077d", ATTRS{idProduct}=="0410", GROUP="plugdev", MODE="0660", TAG+="uaccess"
+# The USB device node: the Waveshare knob's readout (knob_display.py),
+# firmware/tools/pmknob.py and the hardware tests.
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="077d", ATTR{idProduct}=="0410", GROUP="plugdev", MODE="0660", TAG+="uaccess"
+
+# Flashing the Waveshare knob: the ESP32-S3's ROM bootloader (USB-Serial-JTAG,
+# /dev/ttyACM*) and, with the plug flipped, the CH340 to its second chip
+# (/dev/ttyUSB*). Most distributions already give these to 'dialout'.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", ATTRS{idProduct}=="1001", GROUP="dialout", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", GROUP="dialout", MODE="0660", TAG+="uaccess"

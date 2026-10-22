@@ -1,0 +1,88 @@
+# Builds the PowerMate emulator firmware for the Waveshare ESP32-S3 knob.
+# Every build uploads the binaries as an artifact; pushing a v* tag also
+# publishes them as a GitHub release.
+name: firmware
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+    paths:
+      - 'firmware/**'
+      - '.github/workflows/firmware.yml'
+  pull_request:
+    paths:
+      - 'firmware/**'
+      - '.github/workflows/firmware.yml'
+  workflow_dispatch:
+
+# Least privilege by default; jobs that need more ask for it.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+
+      - name: Build with ESP-IDF
+        uses: espressif/esp-idf-ci-action@e6f5c74232b1ccd4c97ed641f1e48553853f1fd5  # v1.2.0
+        with:
+          esp_idf_version: v5.5.6
+          target: esp32s3
+          path: firmware
+          # merged image: one file to flash at 0x0 (esptool, web flashers)
+          command: >-
+            idf.py build &&
+            cd build &&
+            esptool.py --chip esp32s3 merge_bin -o powermate_knob-merged.bin @flash_args
+
+      - name: Build the second chip's sleep firmware
+        uses: espressif/esp-idf-ci-action@e6f5c74232b1ccd4c97ed641f1e48553853f1fd5  # v1.2.0
+        with:
+          esp_idf_version: v5.5.6
+          target: esp32
+          path: firmware/secondary
+          command: >-
+            idf.py build &&
+            cd build &&
+            esptool.py --chip esp32 merge_bin -o knob_secondary_sleep-merged.bin @flash_args
+
+      - name: Collect binaries
+        run: |
+          mkdir -p dist/secondary
+          cd firmware/build
+          cp powermate_knob-merged.bin powermate_knob.bin powermate_knob.elf \
+             bootloader/bootloader.bin partition_table/partition-table.bin \
+             flash_args ../../dist/
+          cd ../secondary/build
+          cp knob_secondary_sleep-merged.bin knob_secondary_sleep.bin flash_args ../../../dist/secondary/
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: powermate-knob-firmware
+          path: dist/
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
+        with:
+          name: powermate-knob-firmware
+          path: dist
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Assets are flat and need unique names: the secondary chip's
+        # flash_args stays in the workflow artifact only.
+        run: >-
+          gh release create "$GITHUB_REF_NAME"
+          dist/*.bin dist/*.elf dist/flash_args dist/secondary/*.bin
+          --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes

@@ -1,0 +1,20 @@
+# TODO
+
+## Check bladeRF retuning keeps the oversampled rate
+- Nuand/bladeRF#983 (open) reports that changing the frequency after
+  setting the rate breaks oversampling, and run.py retunes on every click.
+- On hardware, for each bladeRF flowgraph (normal and wide): tune a few
+  clicks away from a signal at a known frequency and back, and check it
+  still lands where the axis says.
+
+## Waveshare knob: connect over Bluetooth instead of a USB cable
+- Use the knob's Bluetooth to connect to the computer, so it works without
+  a USB cable.
+
+## Waveshare knob: power savings, let the ESP32-S3 sleep
+- Done so far: see "Power" in firmware/README.md.
+- Left: light sleep while there is no USB host (USB needs the clocks
+  running), waking on a twist of the ring, preferably on a tap too.
+- Not permitted to affect normal use.
+- Not allowed to blank the screen: attract-mode breathing keeps going while
+  nobody uses the knob.

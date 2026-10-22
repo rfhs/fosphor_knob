@@ -1,0 +1,6 @@
+CONFIG_IDF_TARGET="esp32"
+# ESP32-U4WDH: 4 MB flash in the package
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+# Nothing to say: keep the boot quick and quiet
+CONFIG_BOOTLOADER_LOG_LEVEL_WARN=y
+CONFIG_LOG_DEFAULT_LEVEL_WARN=y

@@ -1,0 +1,6 @@
+# Generated: by the scripts next to them (firmware/main/fonts/,
+# firmware/main/images/) and by ESP-IDF's component manager. GitHub collapses
+# them in diffs and leaves them out of the language stats.
+firmware/main/fonts/font_*.c linguist-generated=true
+firmware/main/images/rfhs_logo.c linguist-generated=true
+firmware/dependencies.lock linguist-generated=true

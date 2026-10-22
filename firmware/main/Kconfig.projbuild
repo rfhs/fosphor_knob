@@ -1,0 +1,184 @@
+menu "PowerMate emulator"
+
+    config PM_COUNTS_PER_DETENT
+        int "Rotation counts per detent"
+        range 1 16
+        default 1
+        help
+            How many PowerMate rotation counts one click of the ring produces.
+            A real PowerMate gives about 94 counts per turn.
+
+    config PM_MAX_DELTA_PER_REPORT
+        int "Largest rotation in a single report"
+        range 1 7
+        default 1
+        help
+            1 sends every count in its own report (rotation is always +1/-1),
+            which is what fosphor_knob's run.py expects. A real PowerMate
+            lumps up to 7 counts into one report when turned quickly.
+
+    config PM_REVERSE_ROTATION
+        bool "Reverse rotation direction"
+        default n
+
+    config PM_ENCODER_MIN_PULSE_MS
+        int "Minimum encoder pulse length (ms)"
+        range 1 20
+        default 2
+        help
+            Pulses on the ring's switch lines shorter than this are treated
+            as contact bounce.
+
+    config PM_TOUCH_ACTIVE_RADIUS
+        int "Touch button active radius (pixels)"
+        range 60 180
+        default 150
+        help
+            Touches that start further than this from the center of the
+            360x360 screen are ignored, so fingers brushing the rim while
+            turning the ring don't press the button.
+
+    config PM_TOUCH_FALLBACK_POLL_MS
+        int "Touch: also check for a finger this often between touches (ms, 0 = off)"
+        range 0 1000
+        default 0
+        help
+            Between touches only the touch controller's interrupt wakes the
+            reading. It hasn't been seen to miss a touch (it fires within
+            milliseconds of a finger landing, then every ~13 ms while it
+            stays), so this is off. Set it, e.g. to 50, to also read the
+            controller this often in case an interrupt goes missing; each
+            check is one short I2C read. 'tools/pmknob.py touches' shows
+            whether a touch was found by the interrupt or by polling.
+
+    config PM_HAPTIC_PRESS_EFFECT
+        int "Haptic effect on press (0 = none)"
+        range 0 123
+        default 1
+        help
+            Effect number from the DRV2605L ROM library (datasheet section
+            11.2): 1 strong click, 4 sharp click, 7 soft bump, 17 strong
+            click 1, 21 medium click 1, 24 sharp tick 1, ...
+            Try them with 'tools/pmknob.py haptic N'. With PM_TEST_REQUESTS,
+            all three effects can also be changed at run time with
+            'tools/pmknob.py haptic --set', which stores them in flash and
+            overrides these defaults.
+
+    config PM_HAPTIC_RELEASE_EFFECT
+        int "Haptic effect on release (0 = none)"
+        range 0 123
+        default 2
+
+    config PM_HAPTIC_DETENT_EFFECT
+        int "Haptic effect on each detent of the ring (0 = none)"
+        range 0 123
+        default 2
+        help
+            2 is the same strong click as the press at 60%: a hand gripping
+            the ring feels the actuator far more than a fingertip on the glass.
+
+    config PM_ATTRACT_IDLE_MS
+        int "Attract mode: breathe after this long unused (ms, 0 = off)"
+        range 0 60000
+        default 1000
+        help
+            The knob runs its LED itself: steady while someone uses it, and
+            the screen breathes once it has been left alone this long, to
+            draw people in. 0 turns attract mode off: the host controls the
+            LED like on a real PowerMate. Can be changed at run time with
+            'tools/pmknob.py attract MS', which is kept in flash.
+
+    config PM_ATTRACT_INVITE_MS
+        int "Attract mode: take turns with the invitation every (ms, 0 = never)"
+        range 0 60000
+        default 15000
+        help
+            While attract mode breathes, the screen takes turns between what
+            it showed (the readout, or the RFHS logo when there is none) and
+            "THIS IS INTERACTIVE! Twist the knob...", each for this long,
+            starting with the readout. 0 never shows the invitation. Can be
+            changed at run time with 'tools/pmknob.py attract MS --invite MS',
+            which is kept in flash.
+
+    config PM_BREATHE_MIN_PERCENT
+        int "Dimmest point of the breathing (percent of full backlight)"
+        range 0 90
+        default 10
+        help
+            The breathing (attract mode, no USB connection) is done with the
+            backlight; this keeps the screen from going fully dark.
+
+    config PM_BREATHE_PERIOD_MS
+        int "Length of one breath (ms)"
+        range 1000 20000
+        default 4000
+        help
+            How long one breath takes when the knob breathes on its own
+            (attract mode, no USB connection).
+
+    config PM_LED_MIN_PERCENT
+        int "Minimum LED glow (percent)"
+        range 0 50
+        default 0
+        help
+            0 lets the host turn the "LED" glow ring fully off like on a
+            real PowerMate. Raise it to keep the ring faintly lit.
+
+    config PM_BACKLIGHT_PERCENT
+        int "LCD backlight (percent)"
+        range 10 100
+        default 100
+
+    config PM_DISPLAY_ROTATION
+        int "Screen rotation (quarter turns clockwise)"
+        range 0 3
+        default 2
+        help
+            Default orientation of the readout. Can be changed at run time
+            with 'tools/pmknob.py rotate N', which is kept in flash.
+
+    config PM_PULSE_PERIOD_MS
+        int "LED pulse period at normal speed (ms)"
+        range 200 10000
+        default 2000
+        help
+            Length of one LED pulse at the PowerMate's normal pulse speed,
+            for pulses the host asks for (with attract mode off). The knob's
+            own breathing has PM_BREATHE_PERIOD_MS.
+
+    config PM_BOOT_HOLD_MS
+        int "Hold time to enter flash mode at power-up (ms)"
+        range 1000 10000
+        default 3000
+        help
+            Touching the screen while plugging the knob in and holding for
+            this long reboots it into the ROM bootloader for flashing.
+
+    config PM_FLASH_NEEDS_TOUCH
+        bool "Ask for a finger on the screen before entering flash mode"
+        default y
+        help
+            A USB request to reboot into the ROM bootloader only shows a
+            prompt; holding a finger on the screen for 1.5 s confirms it.
+            Without this, anything that can write to the knob's USB device
+            node could reflash it, for instance as a keyboard that types
+            commands.
+
+    config PM_TEST_REQUESTS
+        bool "Enable the test vendor requests"
+        default y
+        help
+            Lets tools/pmknob.py simulate turns and presses (used by the
+            automated tests), play, change and recalibrate haptic effects,
+            take screenshots and force the no-USB hint.
+
+    config PM_DEBUG_I2C
+        bool "Enable raw I2C register access over USB (development only)"
+        depends on PM_TEST_REQUESTS
+        default n
+        help
+            'tools/pmknob.py i2c' reads and writes any register on the touch
+            and haptic bus. A wrong write can take a chip off the bus until
+            the next power cycle, so leave this off outside development.
+
+endmenu
