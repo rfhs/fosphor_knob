@@ -11,9 +11,9 @@ on:
       - 'firmware/**'
       - '.github/workflows/firmware.yml'
   pull_request:
-    paths:
-      - 'firmware/**'
-      - '.github/workflows/firmware.yml'
+    branches: [main]
+  schedule:
+    - cron: '17 6 * * 2'     # Tuesdays, so changes outside this repo show up too
   workflow_dispatch:
 
 # Least privilege by default; jobs that need more ask for it.

@@ -19,11 +19,7 @@ on:
       - 'tests/test_flowgraphs.py'
       - '.github/workflows/flowgraphs.yml'
   pull_request:
-    paths:
-      - '*.grc'
-      - 'fosphor_knob.sh'
-      - 'tests/test_flowgraphs.py'
-      - '.github/workflows/flowgraphs.yml'
+    branches: [main]
   schedule:
     - cron: '17 6 * * 2'     # Tuesdays, after the images are rebuilt on Mondays
   workflow_dispatch:
@@ -73,9 +69,6 @@ jobs:
           # The image ships without the Gentoo repository and the Pentoo overlay
           emerge-webrsync --quiet
           git clone --depth 1 https://github.com/pentoo/pentoo-overlay.git /var/db/repos/pentoo
-          # The image leaves out build-only dependencies, and gr-fosphor's
-          # ebuild doesn't ask for the OpenCL headers, so install them first
-          emerge --oneshot dev-util/opencl-headers
           emerge --oneshot net-analyzer/gr-fosphor
 
       - name: Compile and import the flowgraphs

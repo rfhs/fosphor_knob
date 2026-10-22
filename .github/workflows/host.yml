@@ -7,6 +7,9 @@ on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
+  schedule:
+    - cron: '17 6 * * 2'     # Tuesdays, so changes outside this repo show up too
   workflow_dispatch:
 
 # Least privilege by default; jobs that need more ask for it.
