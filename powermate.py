@@ -62,7 +62,7 @@ class Event(object):
 
 class LedEvent(Event):
     def __init__(self, brightness=MAX_BRIGHTNESS, speed=0,
-               pulse_type=0, asleep=0, awake=0):
+                 pulse_type=0, asleep=0, awake=0):
         self.brightness = brightness
         self.speed = speed
         self.pulse_type = pulse_type
@@ -105,6 +105,7 @@ class FileEventSource(object):
         self.__event_size = event_size
         self.__event_in = open(path, 'rb')
         self.__event_out = open(path, 'wb')
+        self.__out_lock = threading.Lock()
 
     def __iter__(self):
         """Read events from the source sequentially."""
@@ -117,9 +118,10 @@ class FileEventSource(object):
                 yield event
 
     def send(self, event):
-        """Write an event to the source."""
-        self.__event_out.write(event.raw())
-        self.__event_out.flush()
+        """Write an event to the source. Safe to call from any thread."""
+        with self.__out_lock:
+            self.__event_out.write(event.raw())
+            self.__event_out.flush()
 
 
 class EventQueue(object):
@@ -152,6 +154,7 @@ class EventQueue(object):
         key = object()
         with self._lock:
             self.queues[key] = q
+
         def iter_queue():
             try:
                 while True:
@@ -179,17 +182,17 @@ class EventQueue(object):
 
 
 class EventHandler(object):
-  def handle_events(self, source):
-    for event in source:
-      try:
-        return_event = self.handle_event(event)
-      except EventNotImplemented:
-        pass
-      except Exception as e:
-        traceback.print_exc()
-      else:
-        if return_event is not None:
-          source.send(return_event)
+    def handle_events(self, source):
+        for event in source:
+            try:
+                return_event = self.handle_event(event)
+            except EventNotImplemented:
+                pass
+            except Exception:
+                traceback.print_exc()
+            else:
+                if return_event is not None:
+                    source.send(return_event)
 
     def handle_event(self, event):
         raise EventNotImplemented
@@ -251,6 +254,10 @@ class AsyncFileEventDispatcher(object):
         thread.daemon = True
         thread.start()
         self.__threads.append(thread)
+
+    def send(self, event):
+        """Send an event (e.g. an LedEvent) to the device from any thread."""
+        self.__source.send(event)
 
     def run(self):
         self.__source.watch()

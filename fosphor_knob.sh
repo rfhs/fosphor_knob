@@ -21,6 +21,17 @@ control_c() {
 trap control_c INT
 trap control_c TERM
 
+# Every mode but hackrf_sweep is tuned with the knob, so check for a usable
+# one before starting anything. hackrf_sweep sweeps the whole range and can't
+# be tuned: it runs without the knob and without run.py.
+require_knob() {
+  if ! /usr/share/fosphor_knob/run.py --check; then
+    printf 'This mode is tuned with the knob: fix the problem above and start again.\n'
+    exit 1
+  fi
+  use_knob=1
+}
+
 exec_hackrf_common() {
   mkfifo /dev/shm/hackrf_sweep
   hackrf_sweep -I -a0 -f0:7250 -l 40 -g 56 -r /dev/shm/hackrf_sweep &
@@ -40,11 +51,13 @@ exec_hackrf_sweep_sponsors() {
 }
 
 exec_uhd() {
+  require_knob
   /usr/share/fosphor_knob/fosphor_knob_uhd.py &
   pids=$!
 }
 
 exec_uhd_sponsors() {
+  require_knob
   /usr/share/fosphor_knob/fosphor_knob_uhd_sponsors.py &
   pids=$!
 }
@@ -103,14 +116,17 @@ start_bladerf2() {
 }
 
 exec_bladerf2() {
+  require_knob
   start_bladerf2 fosphor_knob_bladerf2_wide fosphor_knob_bladerf2
 }
 
 exec_bladerf2_sponsors() {
+  require_knob
   start_bladerf2 fosphor_knob_bladerf2_wide_sponsors fosphor_knob_bladerf2_sponsors
 }
 
 pids=""
+use_knob=0
 
 if [ "$(basename "${0}")" = "fosphor_knob_uhd" ]; then
   exec_uhd
@@ -145,8 +161,10 @@ else
   fi
 fi
 
-/usr/share/fosphor_knob/run.py &
-pids="${pids} $!"
+if [ "${use_knob}" = 1 ]; then
+  /usr/share/fosphor_knob/run.py &
+  pids="${pids} $!"
+fi
 sleep 20
 wmctrl -F -r "fosphor" -e 0,0,0,0,0
 wmctrl -F -a "fosphor" -b add,maximized_vert,maximized_horz

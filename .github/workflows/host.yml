@@ -1,6 +1,6 @@
-# Checks the host side: the knob tools, the shell scripts and the udev
-# rules. Tests that need a knob plugged in are run by hand:
-# firmware/tools/selftest.py (see "Testing" in firmware/README.md).
+# Checks the host side: run.py and its helpers, the knob tools, the shell
+# launcher and the udev rules. Tests that need a knob plugged in are run by
+# hand: tests/run_all.py (see "Testing" in README.md).
 name: host
 
 on:
@@ -31,6 +31,9 @@ jobs:
 
       - name: Unit tests
         run: python -m unittest discover -s tests -v
+
+      - name: Test runner without hardware
+        run: python tests/run_all.py --no-hardware
 
       - name: shellcheck
         run: shellcheck fosphor_knob.sh nosleep.sh firmware/secondary/flash.sh

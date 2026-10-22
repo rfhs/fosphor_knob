@@ -13,7 +13,7 @@ and `run.py` works unchanged.
 | push and turn | hold the screen and turn the ring |
 | blue LED in the base (brightness, pulse) | cyan glow ring around the screen (see below) |
 | | haptic click on press, release and every detent |
-| | frequency/gain readout, when the host sends it |
+| | frequency/gain readout, when `run.py` sends it |
 | | the RF Hackers Sanctuary logo when there's no readout, and for 5 seconds at power-up |
 
 Touches that start near the rim are ignored, so a hand turning the ring
@@ -27,6 +27,7 @@ nothing has to be redrawn. Any touch or turn brings it straight back.
 While it breathes, the middle of the screen takes turns of 15 seconds
 between the readout (or the logo) and "THIS IS INTERACTIVE! Twist the knob
 to control the spectrum analyzer display!", starting with the readout.
+`run.py` leaves this knob's LED alone and only drives a Griffin's.
 `tools/pmknob.py attract 0` hands the LED to the host like a real PowerMate,
 pulses drawn on the ring.
 
@@ -42,7 +43,9 @@ Whenever the knob has had no working USB connection for 3 seconds (cable
 unplugged, plug upside down, or on a phone charger) its screen says "NO USB
 CONNECTION / Plug in the USB-C cable, or flip the plug over". This is checked
 continuously, not just at power-up, so pulling or flipping the plug while the
-knob stays powered is caught too.
+knob stays powered is caught too. `run.py`
+looks for a PowerMate first; only when it finds none but sees the CH340
+(`1a86:7523`) does it say the knob is probably plugged in upside down.
 `tools/usb_watch.py` shows what the computer sees while you flip the plug.
 
 ## Building
@@ -156,13 +159,13 @@ esptool.py --chip esp32s3 -p /dev/ttyACM0 --before no_reset --after watchdog_res
 
 ## Flashing
 
-Plug the knob in the working way round (`tools/pmknob.py info` should
-answer), and `pip install pyusb` once (`pyserial` too, for
+Plug the knob in the working way round (`../tests/knobs.py` should list a
+Waveshare knob), and `pip install pyusb` once (`pyserial` too, for
 `rescue`). `pmknob.py` finds esptool in ESP-IDF's own Python environment, so
 it works from any terminal; plain `esptool.py` commands below need the IDF
 shell (`. ~/esp/esp-idf-v5.5.6/export.sh`).
 Access to the knob's USB node and to `/dev/ttyACM*` comes from the udev rule
-`../udev/99-fosphor-knob.rules`; how to install it is at the top of the file.
+in [the main README](../README.md#permissions).
 
 ### Updating a knob that runs this firmware
 
@@ -217,17 +220,13 @@ run `idf.py coredump-info`.
 
 ## Testing
 
-With the knob plugged in, the automated self-test checks it from the
-computer, no hands needed (about 20 s):
+How to run the whole automated suite, and the hands-on check, for this knob
+and a Griffin is in [the main README](../README.md#testing). In short:
 
 ```sh
-tools/selftest.py
+../tests/run_all.py --knob waveshare     # the automated suite, about 30 s
+../tests/hands_on.py --knob waveshare    # turn, press and look, guided
 ```
-
-It covers the USB descriptors, the LED requests, the readout, raw reports,
-the no-USB hint, attract mode and the invitation, request hardening and the
-kernel `powermate` driver's events. It needs a build with `PM_TEST_REQUESTS`
-(the default) and puts back the settings it changes.
 
 ## Tools
 
@@ -237,7 +236,7 @@ kernel `powermate` driver's events. It needs a build with `PM_TEST_REQUESTS`
 | `tools/pmknob.py led 128` / `led --pulse` | drive the LED like the Linux driver does |
 | `tools/pmknob.py inject --rotate 3 --press` | simulate turns and presses |
 | `tools/pmknob.py haptic N` / `haptic --set detent 2` / `haptic --recalibrate` | play an effect / change the press, release or detent click (kept in flash) / measure the actuator again |
-| `tools/pmknob.py display 2424e6 32` / `display --clear` / `display` | show a frequency and gain / blank the readout / read it back |
+| `tools/pmknob.py display 2424e6 32` / `display --clear` / `display` | show a frequency and gain like `run.py` does / blank the readout / read it back |
 | `tools/pmknob.py rotate N` | screen rotation in quarter turns (kept in flash) |
 | `tools/pmknob.py screenshot out.png` | grab what the screen shows |
 | `tools/pmknob.py attract 1000 [--invite 15000]` | attract-mode idle time in ms, 0 = host owns the LED; turns of the invitation, 0 = never (kept in flash) |
@@ -248,7 +247,7 @@ kernel `powermate` driver's events. It needs a build with `PM_TEST_REQUESTS`
 | `tools/pmknob.py reboot [--bootloader]` | restart, or ask for the ROM bootloader (confirm on the screen) |
 | `tools/pmknob.py flash [BUILD_DIR]` / `rescue [BUILD_DIR]` | flash a build, see above |
 | `tools/usb_watch.py` | log USB devices coming and going, and what each one is |
-| `tools/selftest.py` | the knob's automated hardware self-test |
+| `tools/selftest.py` | the knob's automated hardware self-test (part of `../tests/run_all.py`) |
 
 The `pmknob.py` requests go through usbfs and work alongside the kernel
 driver.
