@@ -1,7 +1,13 @@
 # Compiles every GNU Radio flowgraph with grcc and imports the generated
-# scripts (tests/test_flowgraphs.py), with Ubuntu's GNU Radio packages.
-# gr-paint (the sponsors image) isn't packaged by Ubuntu, so it is built from
-# source, at the commit Pentoo ships.
+# scripts (tests/test_flowgraphs.py), twice:
+# - ubuntu: Ubuntu's GNU Radio 3.10 packages. gr-paint (the sponsors
+#   image) isn't packaged by Ubuntu, so it is built from source, at the
+#   commit Pentoo ships.
+# - rfctf-sdr: the RFHS SDR image the flowgraphs actually run in (Pentoo,
+#   GNU Radio 3.11). It doesn't have gr-fosphor yet, so the job installs
+#   it with emerge and leaves a warning on the run. The image is rebuilt
+#   every Monday, independently of this repository, so it is also checked
+#   every Tuesday.
 name: flowgraphs
 
 on:
@@ -18,13 +24,15 @@ on:
       - 'fosphor_knob.sh'
       - 'tests/test_flowgraphs.py'
       - '.github/workflows/flowgraphs.yml'
+  schedule:
+    - cron: '17 6 * * 2'     # Tuesdays, after the images are rebuilt on Mondays
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  grcc:
+  ubuntu:
     runs-on: ubuntu-24.04
     env:
       GR_PAINT_COMMIT: c443e36e8ab22ea7819db28df7b69378027dd5b5
@@ -49,3 +57,33 @@ jobs:
 
       - name: Compile and import the flowgraphs
         run: python3 -m unittest discover -s tests -p test_flowgraphs.py -v
+
+  rfctf-sdr:
+    runs-on: ubuntu-24.04
+    container: docker.io/rfhs/rfctf-sdr:latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+
+      - name: gr-fosphor, if the image doesn't have it
+        run: |
+          if portageq has_version / net-analyzer/gr-fosphor; then
+            exit 0
+          fi
+          echo "::warning::rfhs/rfctf-sdr doesn't have gr-fosphor, which every flowgraph needs. Installing it for this test."
+          # The image ships without the Gentoo repository and the Pentoo overlay
+          emerge-webrsync --quiet
+          git clone --depth 1 https://github.com/pentoo/pentoo-overlay.git /var/db/repos/pentoo
+          # The image leaves out build-only dependencies, and gr-fosphor's
+          # ebuild doesn't ask for the OpenCL headers, so install them first
+          emerge --oneshot dev-util/opencl-headers
+          emerge --oneshot net-analyzer/gr-fosphor
+
+      - name: Compile and import the flowgraphs
+        run: python3 -m unittest discover -s tests -p test_flowgraphs.py -v
+
+      - name: fosphor_knob.sh would start the wide bladeRF flowgraphs
+        run: |
+          # fosphor_knob.sh's own check, without starting anything
+          sed -n '/^bladerf_wide_supported()/,/^}/p' fosphor_knob.sh > wide_check.sh
+          echo bladerf_wide_supported >> wide_check.sh
+          sh wide_check.sh
