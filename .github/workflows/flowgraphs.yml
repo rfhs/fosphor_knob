@@ -1,0 +1,51 @@
+# Compiles every GNU Radio flowgraph with grcc and imports the generated
+# scripts (tests/test_flowgraphs.py), with Ubuntu's GNU Radio packages.
+# gr-paint (the sponsors image) isn't packaged by Ubuntu, so it is built from
+# source, at the commit Pentoo ships.
+name: flowgraphs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '*.grc'
+      - 'fosphor_knob.sh'
+      - 'tests/test_flowgraphs.py'
+      - '.github/workflows/flowgraphs.yml'
+  pull_request:
+    paths:
+      - '*.grc'
+      - 'fosphor_knob.sh'
+      - 'tests/test_flowgraphs.py'
+      - '.github/workflows/flowgraphs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  grcc:
+    runs-on: ubuntu-24.04
+    env:
+      GR_PAINT_COMMIT: c443e36e8ab22ea7819db28df7b69378027dd5b5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+
+      - name: GNU Radio, gr-osmosdr, gr-fosphor (and Pillow for gr-paint)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gnuradio gnuradio-dev gr-osmosdr gr-fosphor python3-pil cmake g++ make pkg-config
+
+      - name: gr-paint
+        run: |
+          curl -fsSL "https://github.com/drmpeg/gr-paint/archive/${GR_PAINT_COMMIT}.tar.gz" | tar -xz
+          # Ubuntu's Python only looks in dist-packages
+          cmake -S "gr-paint-${GR_PAINT_COMMIT}" -B gr-paint-build -DCMAKE_INSTALL_PREFIX=/usr \
+            -DGR_PYTHON_DIR=/usr/lib/python3/dist-packages
+          cmake --build gr-paint-build -j "$(nproc)"
+          sudo cmake --install gr-paint-build
+          sudo ldconfig
+
+      - name: Compile and import the flowgraphs
+        run: python3 -m unittest discover -s tests -p test_flowgraphs.py -v

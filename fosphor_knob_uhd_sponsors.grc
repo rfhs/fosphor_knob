@@ -37,7 +37,7 @@ blocks:
   id: variable
   parameters:
     comment: ''
-    value: 2462e6
+    value: 915e6
   states:
     bus_sink: false
     bus_source: false
@@ -639,7 +639,7 @@ blocks:
 - name: xmlrpc_server_0
   id: xmlrpc_server
   parameters:
-    addr: 0.0.0.0
+    addr: 127.0.0.1
     alias: ''
     comment: ''
     port: '8080'
