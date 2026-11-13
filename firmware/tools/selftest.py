@@ -175,10 +175,10 @@ def wait_for(dev, condition, timeout):
 def test_screens(dev):
     print("the middle of the screen: the readout, the invitation in attract mode, the RFHS logo")
     info = pmknob.read_info(dev)
-    before = (info["attract_ms"], info["invite_ms"])
+    before = (info["attract_ms"], info["invite_ms"], info["readout_ms"])
     shown = pmknob.read_display(dev)
     pmknob.send_display(dev, 433920000, 30)
-    pmknob.set_attract(dev, 300, 1000)       # shortened for the test
+    pmknob.set_attract(dev, 300, invite_ms=600, readout_ms=1000)       # shortened for the test
     try:
         inject(dev, button=True)
         inject(dev, button=False)
@@ -191,8 +191,11 @@ def test_screens(dev):
         took = time.time() - start
         check(i["screen"] == pmknob.SCREEN_INVITE and 0.7 < took < 1.4,
               "then the invitation, %.1f s later" % took)
+        start = time.time()
         i = wait_for(dev, lambda i: i["screen"] == pmknob.SCREEN_READOUT, 1.5)
-        check(i["screen"] == pmknob.SCREEN_READOUT, "then the readout again")
+        took = time.time() - start
+        check(i["screen"] == pmknob.SCREEN_READOUT and 0.3 < took < 0.9,
+              "then the readout again, %.1f s later" % took)
         wait_for(dev, lambda i: i["screen"] == pmknob.SCREEN_INVITE, 1.5)
         inject(dev, button=True)
         inject(dev, button=False)
@@ -206,7 +209,33 @@ def test_screens(dev):
         pmknob.send_display(dev, shown["freq_hz"], shown["gain_db"], shown["gain_min"], shown["gain_max"],
                             valid=shown["valid"])
     i = pmknob.read_info(dev)
-    check((i["attract_ms"], i["invite_ms"]) == before, "settings restored (%d ms, invitation %d ms)" % before)
+    check((i["attract_ms"], i["invite_ms"], i["readout_ms"]) == before,
+          "settings restored (%d ms, invitation %d ms, readout %d ms)" % before)
+
+
+def test_edge_haptic(dev):
+    print("edge haptic effect")
+    accepted = not refused(dev, pmknob.VENDOR_OUT, pmknob.REQ_EDGE, 0, 0, None)
+    check(accepted, "the edge request is accepted")
+    if not accepted:
+        i = pmknob.read_info(dev)
+        print("        (firmware %d.%d.%d; the edge effect needs 1.6 or later)" % (
+            i["fw_major"], i["fw_minor"], i["fw_patch"]))
+        return
+    before = pmknob.read_info(dev)["haptic_edge"]
+    new = 47 if before != 47 else 48
+    try:
+        dev.ctrl_transfer(pmknob.VENDOR_OUT, pmknob.REQ_HAPTIC_SET, pmknob.HAPTIC_EVENTS.index("edge"), new,
+                          None, timeout=1000)
+        wait_for(dev, lambda i: i["haptic_edge"] == new, 1)
+        i = pmknob.read_info(dev)
+        check(i["haptic_edge"] == new, "the edge effect is kept and reported (%d)" % new)
+    finally:
+        dev.ctrl_transfer(pmknob.VENDOR_OUT, pmknob.REQ_HAPTIC_SET, pmknob.HAPTIC_EVENTS.index("edge"), before,
+                          None, timeout=1000)
+    wait_for(dev, lambda i: i["haptic_edge"] == before, 1)
+    check(pmknob.read_info(dev)["haptic_edge"] == before, "setting restored (%d)" % before)
+    check(refused(dev, pmknob.VENDOR_OUT, pmknob.REQ_HAPTIC_SET, 4, 1, None), "haptic event 4 is refused")
 
 
 def test_hardening(dev):
@@ -418,6 +447,7 @@ def main():
     test_plug_hint(dev)
     test_attract_breathing(dev)
     test_screens(dev)
+    test_edge_haptic(dev)
     test_hardening(dev)
     test_kernel_events(dev)
     print("\n%s" % ("all checks passed" if failures == 0 else "%d check(s) FAILED" % failures))

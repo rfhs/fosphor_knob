@@ -12,7 +12,7 @@ and `run.py` works unchanged.
 | push the knob | touch the middle of the screen |
 | push and turn | hold the screen and turn the ring |
 | blue LED in the base (brightness, pulse) | cyan glow ring around the screen (see below) |
-| | haptic click on press, release and every detent |
+| | haptic click on press, release and every detent; a buzz when `run.py` says a turn hit a tuning or gain limit |
 | | frequency/gain readout, when `run.py` sends it |
 | | the RF Hackers Sanctuary logo when there's no readout, and for 5 seconds at power-up |
 
@@ -24,9 +24,10 @@ is in use, breathing after 1 second untouched to invite people to try it,
 and breathing whenever there is no USB connection. The breathing is done by
 the backlight: the ring stays at full and the whole screen breathes, so
 nothing has to be redrawn. Any touch or turn brings it straight back.
-While it breathes, the middle of the screen takes turns of 15 seconds
-between the readout (or the logo) and "THIS IS INTERACTIVE! Twist the knob
-to control the spectrum analyzer display!", starting with the readout.
+While it breathes, the middle of the screen takes turns between the
+readout (or the logo), for 15 seconds, and "THIS IS INTERACTIVE! Twist the
+knob to control the spectrum analyzer display!", for 8 seconds, starting
+with the readout.
 `run.py` leaves this knob's LED alone and only drives a Griffin's.
 `tools/pmknob.py attract 0` hands the LED to the host like a real PowerMate,
 pulses drawn on the ring.
@@ -97,8 +98,10 @@ that way wins over the build option, also across firmware updates (see
 | `PM_HAPTIC_PRESS_EFFECT` | 1 | haptic effect on a press: a DRV2605L ROM effect (1 strong click, 4 sharp click, 7 soft bump, 21 medium click, 24 sharp tick, …), 0 = none. Run time: `pmknob.py haptic --set press N`; try one with `pmknob.py haptic N` |
 | `PM_HAPTIC_RELEASE_EFFECT` | 2 | the same on release. Run time: `haptic --set release N` |
 | `PM_HAPTIC_DETENT_EFFECT` | 2 | the same on each click of the ring (2 is the strong click at 60%). Run time: `haptic --set detent N` |
+| `PM_HAPTIC_EDGE_EFFECT` | 52 | the effect `run.py` asks for when a turn hits a tuning or gain limit (52 is "Pulsing Strong 1 - 100%"), 0 = none. Run time: `haptic --set edge N`; play it with `pmknob.py edge` |
 | `PM_ATTRACT_IDLE_MS` | 1000 | breathe after this many ms unused; 0 hands the LED to the host like a real PowerMate. Run time: `pmknob.py attract MS` |
-| `PM_ATTRACT_INVITE_MS` | 15000 | while breathing, take turns of this many ms between the readout (or logo) and the "THIS IS INTERACTIVE!" invitation; 0 = never. Run time: `pmknob.py attract MS --invite MS` |
+| `PM_ATTRACT_READOUT_MS` | 15000 | while breathing, show the readout (or logo) this many ms between invitations. Run time: `pmknob.py attract MS --readout MS` |
+| `PM_ATTRACT_INVITE_MS` | 8000 | while breathing, show the "THIS IS INTERACTIVE!" invitation this many ms at a time; 0 = never. Run time: `pmknob.py attract MS --invite MS` |
 | `PM_BREATHE_MIN_PERCENT` | 10 | dimmest point of the breathing, in percent of full backlight |
 | `PM_BREATHE_PERIOD_MS` | 4000 | length of one breath |
 | `PM_LED_MIN_PERCENT` | 0 | dimmest the glow ring goes when the host turns the LED down; 0 = fully off, like a PowerMate |
@@ -143,8 +146,8 @@ updates and override the build options:
 
 | Setting | Change it with | Build option |
 |---|---|---|
-| attract mode idle time, invitation turns | `tools/pmknob.py attract MS [--invite MS]` | `PM_ATTRACT_IDLE_MS`, `PM_ATTRACT_INVITE_MS` |
-| haptic effects | `tools/pmknob.py haptic --set press\|release\|detent N` (with `PM_TEST_REQUESTS`) | `PM_HAPTIC_*_EFFECT` |
+| attract mode idle time, readout and invitation times | `tools/pmknob.py attract MS [--readout MS] [--invite MS]` | `PM_ATTRACT_IDLE_MS`, `PM_ATTRACT_READOUT_MS`, `PM_ATTRACT_INVITE_MS` |
+| haptic effects | `tools/pmknob.py haptic --set press\|release\|detent\|edge N` (with `PM_TEST_REQUESTS`) | `PM_HAPTIC_*_EFFECT` |
 | screen rotation | `tools/pmknob.py rotate N` | `PM_DISPLAY_ROTATION` |
 | haptic calibration | measured on the first boot; `tools/pmknob.py haptic --recalibrate` (with `PM_TEST_REQUESTS`) | — |
 
@@ -235,11 +238,12 @@ and a Griffin is in [the main README](../README.md#testing). In short:
 | `tools/pmknob.py info` | firmware status, counters, timings, settings in use |
 | `tools/pmknob.py led 128` / `led --pulse` | drive the LED like the Linux driver does |
 | `tools/pmknob.py inject --rotate 3 --press` | simulate turns and presses |
-| `tools/pmknob.py haptic N` / `haptic --set detent 2` / `haptic --recalibrate` | play an effect / change the press, release or detent click (kept in flash) / measure the actuator again |
+| `tools/pmknob.py haptic N` / `haptic --set detent 2` / `haptic --recalibrate` | play an effect / change the press, release, detent or edge effect (kept in flash) / measure the actuator again |
+| `tools/pmknob.py edge` | play the edge effect, as the host does when a turn hits a tuning or gain limit (firmware 1.6 or later) |
 | `tools/pmknob.py display 2424e6 32` / `display --clear` / `display` | show a frequency and gain like `run.py` does / blank the readout / read it back |
 | `tools/pmknob.py rotate N` | screen rotation in quarter turns (kept in flash) |
 | `tools/pmknob.py screenshot out.png` | grab what the screen shows |
-| `tools/pmknob.py attract 1000 [--invite 15000]` | attract-mode idle time in ms, 0 = host owns the LED; turns of the invitation, 0 = never (kept in flash) |
+| `tools/pmknob.py attract 1000 [--readout 15000] [--invite 8000]` | attract-mode idle time in ms, 0 = host owns the LED; how long the readout and the invitation each show, invitation 0 = never (kept in flash) |
 | `tools/pmknob.py pulses` | raw ring pulses, for tuning the debouncer |
 | `tools/pmknob.py touches --watch` | what the touch controller reports and what became of each contact, for chasing missed touches |
 | `tools/pmknob.py plug-hint on` | show the flip-the-plug hint without unplugging |
@@ -275,7 +279,8 @@ driver.
 * **Haptics** (`main/haptic.c`): DRV2605L driving an LRA (about 165 Hz) in
   closed loop, auto-calibrated on first boot. Its enable pin is GPIO38, which
   Waveshare's schematic labels as a UART line; with it left floating the clicks
-  are barely there.
+  are barely there. The host can also ask for the edge buzz (`PM_REQ_EDGE`)
+  when a turn hits a limit.
 * **Screen** (`main/display.c`, `main/ui.c`): ST77916 over QSPI with LVGL.
   The glow ring and the gain arc are filled by hand into one image, in
   separate bands, so an LED pulse never re-renders the numbers (about

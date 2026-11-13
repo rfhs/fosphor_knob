@@ -14,8 +14,9 @@ PM_TEST_REQUESTS (the default); i2c needs PM_DEBUG_I2C as well.
     pmknob.py inject --rotate 3 --press
                                      simulate turns and presses
     pmknob.py haptic 1               play haptic effect 1 (DRV2605L ROM library number)
-    pmknob.py haptic --set detent 3  effect for press/release/detent (0 = off), kept in flash
+    pmknob.py haptic --set detent 3  effect for press/release/detent/edge (0 = off), kept in flash
     pmknob.py haptic --recalibrate   measure the actuator again
+    pmknob.py edge                   play the edge effect (what run.py asks for when a turn hits a limit)
     pmknob.py i2c 0x5a 0x00 [N | --write VALUE]
                                      read/write a register on the I2C bus
     pmknob.py display 2424e6 32      show a frequency (Hz) and gain (dB) like run.py does
@@ -23,10 +24,11 @@ PM_TEST_REQUESTS (the default); i2c needs PM_DEBUG_I2C as well.
     pmknob.py rotate 2               rotate the screen (quarter turns clockwise), kept in flash
     pmknob.py screenshot out.png
     pmknob.py plug-hint on|off       force the "flip the USB-C plug" hint (to look at it)
-    pmknob.py attract 1000 [--invite 15000]
+    pmknob.py attract 1000 [--readout 15000] [--invite 8000]
                                      the screen breathes after 1 s unused (0 = host owns
-                                     the LED) and takes turns of 15 s between the readout
-                                     and "THIS IS INTERACTIVE!" (0 = never); kept in flash
+                                     the LED) and takes turns between 15 s of the readout
+                                     and 8 s of "THIS IS INTERACTIVE!" (0 = never); kept
+                                     in flash
     pmknob.py reboot [--bootloader]  restart, or ask for the ROM bootloader (hold a finger
                                      on the knob's screen to confirm)
     pmknob.py flash [BUILD_DIR]      reboot into the ROM bootloader (confirmed the same way)
@@ -71,6 +73,8 @@ REQ_SNAPSHOT_READ = 0xFA
 REQ_FORCE_NO_HOST = 0xFB
 REQ_ATTRACT = 0xFC
 REQ_TOUCH_LOG = 0xFD
+REQ_ATTRACT_READOUT = 0xFE
+REQ_EDGE = 0xFF
 
 # REQ_LED commands, the low byte of wValue (the Linux driver's SET_* values)
 LED_CMD_STATIC_BRIGHTNESS = 0x01
@@ -84,7 +88,7 @@ LED_MODE_IN_USE = 1           # steady
 LED_MODE_ATTRACT = 2          # breathing: left alone for a while
 LED_MODE_NO_HOST = 3          # breathing: no USB connection
 
-HAPTIC_EVENTS = ("press", "release", "detent")   # REQ_HAPTIC_SET's wValue
+HAPTIC_EVENTS = ("press", "release", "detent", "edge")   # REQ_HAPTIC_SET's wValue
 
 # info["screen"] (ui_screen_t)
 SCREEN_READOUT = 1
@@ -100,7 +104,7 @@ DISPLAY_FORMAT = "<BBhhhQ"    # pm_display_msg_t
 DISPLAY_VALID = 0x01
 DISPLAY_NO_GAIN = 0x02
 
-INFO_FORMAT = "<4sBBBBIIHBBBBBBhBBBBBBHHIIIIIIBBBBBBBBBBHHHHBBBBH"   # pm_info_t
+INFO_FORMAT = "<4sBBBBIIHBBBBBBhBBBBBBHHIIIIIIBBBBBBBBBBHHHHBBBBHHB"   # pm_info_t
 INFO_FIELDS = (
     "magic info_version fw_major fw_minor fw_patch uptime_ms led_commands led_speed "
     "led_brightness led_table led_asleep led_awake led_level usb_suspended pending_rotation "
@@ -108,14 +112,15 @@ INFO_FIELDS = (
     "touch_x touch_y touch_presses enc_steps_cw enc_steps_ccw enc_short_pulses reports_sent "
     "i2c_errors display_ok haptic_status haptic_lra_period haptic_cal_source "
     "haptic_press haptic_release haptic_detent display_rotation display_has_values plug_hint ui_fps_x10 "
-    "ui_glow_us ui_refresh_ms attract_ms led_mode flash_confirm backlight_level screen invite_ms"
+    "ui_glow_us ui_refresh_ms attract_ms led_mode flash_confirm backlight_level screen invite_ms readout_ms haptic_edge"
 ).split()
 INFO_SIZE = struct.calcsize(INFO_FORMAT)
-assert INFO_SIZE == 84
+assert INFO_SIZE == 87
 # Firmware 1.1 sent 80 bytes. Fields are only ever appended (or take the
 # place of reserved zeros), so its info still reads, with zeros for the newer
 # fields: a knob on old firmware can still be inspected and updated.
 INFO_MIN_SIZE = 80
+INFO_READOUT_SIZE = 86   # firmware 1.5 up: has readout_ms
 INFO_MAGIC = b"PMEK"
 
 
@@ -124,10 +129,13 @@ def read_info(dev):
     if len(data) < INFO_MIN_SIZE:
         raise ValueError("info is %d bytes, expected at least %d: firmware and pmknob.py don't match" %
                          (len(data), INFO_MIN_SIZE))
+    has_readout = len(data) >= INFO_READOUT_SIZE
     data = data.ljust(INFO_SIZE, b"\0")
     info = dict(zip(INFO_FIELDS, struct.unpack_from(INFO_FORMAT, data)))
     if info["magic"] != INFO_MAGIC:
         raise ValueError("unexpected info magic %r" % info["magic"])
+    if not has_readout:
+        info["readout_ms"] = info["invite_ms"]   # before 1.5 one turn served both
     return info
 
 
@@ -185,13 +193,14 @@ def cmd_info(args):
     if not i["attract_ms"]:
         attract = "off (host owns the LED)"
     elif i["invite_ms"]:
-        attract = "after %d ms idle, invitation in turns of %d ms" % (i["attract_ms"], i["invite_ms"])
+        attract = "after %d ms idle, then %d ms of the readout and %d ms of the invitation in turns" % (
+            i["attract_ms"], i["readout_ms"], i["invite_ms"])
     else:
         attract = "after %d ms idle, no invitation" % i["attract_ms"]
     flash_prompt = ", WAITING FOR A TOUCH TO ALLOW FLASHING" if i["flash_confirm"] else ""
     print("led ring        %s, attract mode %s%s" % (led_summary(i), attract, flash_prompt))
-    print("haptic effects  press %d, release %d, detent %d" % (
-        i["haptic_press"], i["haptic_release"], i["haptic_detent"]))
+    print("haptic effects  press %d, release %d, detent %d, edge %d" % (
+        i["haptic_press"], i["haptic_release"], i["haptic_detent"], i["haptic_edge"]))
     print("screen          shows %s, rotation %d, %s, %.1f refreshes/s (last %d ms, ring %.1f ms)" % (
         SCREENS.get(i["screen"], "?"), i["display_rotation"],
         "readout values set" if i["display_has_values"] else "no readout values",
@@ -345,6 +354,14 @@ def cmd_haptic(args):
     dev.ctrl_transfer(VENDOR_OUT, REQ_HAPTIC, effect, 0, None, timeout=1000)
 
 
+def cmd_edge(args):
+    dev = require_knob()
+    try:
+        dev.ctrl_transfer(VENDOR_OUT, REQ_EDGE, 0, 0, None, timeout=1000)
+    except usb.core.USBError as e:
+        sys.exit("refused (%s): the edge effect needs firmware 1.6 or later" % e)
+
+
 def cmd_i2c(args):
     dev = require_knob()
     wvalue = (int(args.addr, 0) << 8) | int(args.reg, 0)
@@ -358,17 +375,23 @@ def cmd_i2c(args):
         sys.exit("refused (%s): the firmware needs CONFIG_PM_DEBUG_I2C, or the chip didn't answer" % e)
 
 
-def set_attract(dev, ms, invite_ms=None):
-    """Attract mode idle time (0 hands the LED to the host) and the turns of
-    the invitation (0 = never; None keeps the current setting)."""
+def set_attract(dev, ms, invite_ms=None, readout_ms=None):
+    """Attract mode idle time (0 hands the LED to the host), how long the
+    invitation shows (0 = never) and how long the readout shows between
+    invitations; None keeps the current setting."""
     if invite_ms is None:
         invite_ms = read_info(dev)["invite_ms"]
+    if readout_ms is not None:
+        dev.ctrl_transfer(VENDOR_OUT, REQ_ATTRACT_READOUT, max(0, min(65535, readout_ms)), 0, None, timeout=1000)
     dev.ctrl_transfer(VENDOR_OUT, REQ_ATTRACT, max(0, min(65535, ms)), max(0, min(65535, invite_ms)), None,
                       timeout=1000)
 
 
 def cmd_attract(args):
-    set_attract(require_knob(), args.ms, args.invite)
+    try:
+        set_attract(require_knob(), args.ms, args.invite, args.readout)
+    except usb.core.USBError as e:
+        sys.exit("refused (%s): --readout needs firmware 1.5 or later" % e)
 
 
 def send_display(dev, freq_hz, gain_db, gain_min=0, gain_max=76, valid=True):
@@ -624,8 +647,9 @@ def main():
     p.add_argument("effect", type=int, nargs="?", default=1)
     p.add_argument("--recalibrate", action="store_true")
     p.add_argument("--set", nargs=2, metavar=("EVENT", "EFFECT"),
-                   help="set the effect for press, release or detent (0 = none); kept in flash")
+                   help="set the effect for press, release, detent or edge (0 = none); kept in flash")
     p.set_defaults(func=cmd_haptic)
+    sub.add_parser("edge").set_defaults(func=cmd_edge)
     p = sub.add_parser("i2c")
     p.add_argument("addr")
     p.add_argument("reg")
@@ -645,8 +669,10 @@ def main():
     p.set_defaults(func=cmd_rotate)
     p = sub.add_parser("attract")
     p.add_argument("ms", type=int)
+    p.add_argument("--readout", type=int, metavar="MS",
+                   help="how long the readout shows between invitations; default: unchanged")
     p.add_argument("--invite", type=int, metavar="MS",
-                   help="turns between the readout and the invitation (0 = never); default: unchanged")
+                   help="how long the invitation shows (0 = never); default: unchanged")
     p.set_defaults(func=cmd_attract)
     p = sub.add_parser("plug-hint")
     p.add_argument("state", choices=("on", "off"))

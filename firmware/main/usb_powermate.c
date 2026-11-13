@@ -232,8 +232,10 @@ typedef struct __attribute__((packed)) {
     uint8_t backlight_level;     // percent of full
     uint8_t screen;              // ui_screen_t
     uint16_t invite_ms;
+    uint16_t readout_ms;
+    uint8_t haptic_edge;
 } pm_info_t;
-_Static_assert(sizeof(pm_info_t) == 84, "host tool expects 84 bytes");
+_Static_assert(sizeof(pm_info_t) == 87, "host tool expects 87 bytes");
 
 static uint16_t fill_info(uint8_t *buf)
 {
@@ -290,6 +292,8 @@ static uint16_t fill_info(uint8_t *buf)
         .backlight_level = g_pm_stats.backlight_level,
         .screen = g_pm_stats.screen,
         .invite_ms = led_get_invite_ms(),
+        .readout_ms = led_get_readout_ms(),
+        .haptic_edge = haptic_get_effect(HAPTIC_EVENT_EDGE),
     };
     memcpy(buf, &info, sizeof(info));
     return sizeof(info);
@@ -540,7 +544,27 @@ bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_requ
             return false;
         }
         if (stage == CONTROL_STAGE_SETUP) {
-            led_set_attract(req->wValue, req->wIndex);
+            led_set_attract(req->wValue, led_get_readout_ms(), req->wIndex);
+            return tud_control_status(rhport, req);
+        }
+        return true;
+
+    case PM_REQ_ATTRACT_READOUT:
+        if (!out_no_data) {
+            return false;
+        }
+        if (stage == CONTROL_STAGE_SETUP) {
+            led_set_attract(led_get_attract_ms(), req->wValue, led_get_invite_ms());
+            return tud_control_status(rhport, req);
+        }
+        return true;
+
+    case PM_REQ_EDGE:
+        if (!out_no_data) {
+            return false;
+        }
+        if (stage == CONTROL_STAGE_SETUP) {
+            haptic_event(HAPTIC_EVENT_EDGE);
             return tud_control_status(rhport, req);
         }
         return true;

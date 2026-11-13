@@ -13,6 +13,7 @@ typedef enum {
     HAPTIC_EVENT_PRESS = 0,
     HAPTIC_EVENT_RELEASE,
     HAPTIC_EVENT_DETENT,
+    HAPTIC_EVENT_EDGE,
     HAPTIC_EVENT_COUNT,
 } haptic_event_t;
 

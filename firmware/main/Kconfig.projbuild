@@ -77,6 +77,16 @@ menu "PowerMate emulator"
             2 is the same strong click as the press at 60%: a hand gripping
             the ring feels the actuator far more than a fingertip on the glass.
 
+    config PM_HAPTIC_EDGE_EFFECT
+        int "Haptic effect when a turn hits a tuning or gain limit (0 = none)"
+        range 0 123
+        default 52
+        help
+            Played when the host asks for it because a turn hit a tuning or
+            gain limit. 52 is the ROM effect "Pulsing Strong 1 - 100%",
+            clearly different from the click of a detent. 0 = none. Run time:
+            pmknob.py haptic --set edge N.
+
     config PM_ATTRACT_IDLE_MS
         int "Attract mode: breathe after this long unused (ms, 0 = off)"
         range 0 60000
@@ -88,15 +98,26 @@ menu "PowerMate emulator"
             LED like on a real PowerMate. Can be changed at run time with
             'tools/pmknob.py attract MS', which is kept in flash.
 
-    config PM_ATTRACT_INVITE_MS
-        int "Attract mode: take turns with the invitation every (ms, 0 = never)"
+    config PM_ATTRACT_READOUT_MS
+        int "Attract mode: show the readout this long between invitations (ms)"
         range 0 60000
         default 15000
         help
             While attract mode breathes, the screen takes turns between what
             it showed (the readout, or the RFHS logo when there is none) and
-            "THIS IS INTERACTIVE! Twist the knob...", each for this long,
-            starting with the readout. 0 never shows the invitation. Can be
+            "THIS IS INTERACTIVE! Twist the knob...", starting with the
+            readout, which stays this long each time. 0 goes straight to
+            the invitation. Can be changed at run time with
+            'tools/pmknob.py attract MS --readout MS', which is kept in flash.
+
+    config PM_ATTRACT_INVITE_MS
+        int "Attract mode: show the invitation this long (ms, 0 = never)"
+        range 0 60000
+        default 8000
+        help
+            How long "THIS IS INTERACTIVE! Twist the knob..." stays each
+            time it takes its turn with the readout (see
+            PM_ATTRACT_READOUT_MS). 0 never shows the invitation. Can be
             changed at run time with 'tools/pmknob.py attract MS --invite MS',
             which is kept in flash.
 

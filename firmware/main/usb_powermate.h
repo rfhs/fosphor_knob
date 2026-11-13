@@ -6,7 +6,7 @@
 
 // Vendor requests understood by the device (bmRequestType 0x40 OUT / 0xC0 IN).
 // 0x01 is the Griffin PowerMate LED command (the Linux driver sends it as 0x41);
-// the 0xF0-0xFD requests are extensions of this firmware: the display readout
+// the 0xF0-0xFF requests are extensions of this firmware: the display readout
 // (fed by knob_display.py, for run.py) and maintenance/testing (tools/pmknob.py).
 // INJECT, HAPTIC, HAPTIC_SET, SNAPSHOT, SNAPSHOT_READ, FORCE_NO_HOST and I2C
 // exist only with CONFIG_PM_TEST_REQUESTS.
@@ -27,8 +27,11 @@
 #define PM_REQ_SNAPSHOT_READ 0xFA  // IN, snapshot bytes from offset (wValue << 16) | wIndex
 #define PM_REQ_FORCE_NO_HOST 0xFB  // OUT, wValue 1 = show the "no USB connection" hint anyway
 #define PM_REQ_ATTRACT      0xFC   // OUT, wValue = attract mode idle time in ms, 0 = host owns the LED;
-                                   // wIndex = invitation turn in ms, 0 = never; kept in flash
+                                   // wIndex = how long the invitation shows in ms, 0 = never; kept in flash
 #define PM_REQ_TOUCH_LOG    0xFD   // IN, touch_log_header_t + touch_log_entry_t after seq wValue
+#define PM_REQ_ATTRACT_READOUT 0xFE  // OUT, wValue = how long the readout shows between invitations
+                                     // in ms; kept in flash
+#define PM_REQ_EDGE         0xFF   // OUT, no data: play the edge effect (a turn hit a limit)
 
 // PM_REQ_DISPLAY payload (little endian), sent by the host application.
 typedef struct __attribute__((packed)) {

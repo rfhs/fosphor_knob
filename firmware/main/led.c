@@ -51,10 +51,14 @@
 
 #define NVS_NAMESPACE     "led"
 #define NVS_KEY_ATTRACT   "attract_ms"
-#define NVS_KEY_INVITE    "invite_ms"
+// Not "invite_ms": firmware 1.4 kept the shared turn of the readout and
+// the invitation under that key, and a knob updated from it still has it.
+#define NVS_KEY_READOUT   "readout_ms"
+#define NVS_KEY_INVITE    "invite_on_ms"
 
 static const char *TAG = "led";
 static atomic_uint s_attract_ms = CONFIG_PM_ATTRACT_IDLE_MS;
+static atomic_uint s_readout_ms = CONFIG_PM_ATTRACT_READOUT_MS;
 static atomic_uint s_invite_ms = CONFIG_PM_ATTRACT_INVITE_MS;
 static TaskHandle_t s_task;
 
@@ -141,14 +145,14 @@ static float pulse_period_ms(uint16_t speed)
     return period < MIN_PULSE_PERIOD_MS ? MIN_PULSE_PERIOD_MS : period;
 }
 
-// Attract mode takes turns of invite_ms between the readout and the
-// invitation, readout first: whoever just let go still sees what they set.
-static bool invite_due(uint32_t attract_ms, uint32_t invite_ms, uint32_t idle_ms)
+// Attract mode takes turns between readout_ms of the readout and invite_ms
+// of the invitation, readout first: whoever just let go still sees what they set.
+static bool invite_due(uint32_t attract_ms, uint32_t readout_ms, uint32_t invite_ms, uint32_t idle_ms)
 {
     if (!attract_ms || !invite_ms || idle_ms < attract_ms) {
         return false;
     }
-    return (idle_ms - attract_ms) / invite_ms % 2 == 1;
+    return (idle_ms - attract_ms) % (readout_ms + invite_ms) >= readout_ms;
 }
 
 // Fallback wake-up a little after a fade should have ended; the fade-end
@@ -315,18 +319,25 @@ uint16_t led_get_attract_ms(void)
     return (uint16_t)atomic_load(&s_attract_ms);
 }
 
+uint16_t led_get_readout_ms(void)
+{
+    return (uint16_t)atomic_load(&s_readout_ms);
+}
+
 uint16_t led_get_invite_ms(void)
 {
     return (uint16_t)atomic_load(&s_invite_ms);
 }
 
-void led_set_attract(uint16_t attract_ms, uint16_t invite_ms)
+void led_set_attract(uint16_t attract_ms, uint16_t readout_ms, uint16_t invite_ms)
 {
     atomic_store(&s_attract_ms, attract_ms);
+    atomic_store(&s_readout_ms, readout_ms);
     atomic_store(&s_invite_ms, invite_ms);
     nvs_handle_t nvs;
     if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvs) == ESP_OK) {
         nvs_set_u16(nvs, NVS_KEY_ATTRACT, attract_ms);
+        nvs_set_u16(nvs, NVS_KEY_READOUT, readout_ms);
         nvs_set_u16(nvs, NVS_KEY_INVITE, invite_ms);
         nvs_commit(nvs);
         nvs_close(nvs);
@@ -337,7 +348,8 @@ void led_set_attract(uint16_t attract_ms, uint16_t invite_ms)
 bool led_attract_invite(void)
 {
     return !usb_powermate_no_host() &&
-           invite_due(atomic_load(&s_attract_ms), atomic_load(&s_invite_ms), pm_input_idle_ms());
+           invite_due(atomic_load(&s_attract_ms), atomic_load(&s_readout_ms), atomic_load(&s_invite_ms),
+                      pm_input_idle_ms());
 }
 
 esp_err_t led_start(void)
@@ -347,6 +359,9 @@ esp_err_t led_start(void)
     if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &nvs) == ESP_OK) {
         if (nvs_get_u16(nvs, NVS_KEY_ATTRACT, &ms) == ESP_OK) {
             atomic_store(&s_attract_ms, ms);
+        }
+        if (nvs_get_u16(nvs, NVS_KEY_READOUT, &ms) == ESP_OK) {
+            atomic_store(&s_readout_ms, ms);
         }
         if (nvs_get_u16(nvs, NVS_KEY_INVITE, &ms) == ESP_OK) {
             atomic_store(&s_invite_ms, ms);

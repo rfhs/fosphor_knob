@@ -67,6 +67,7 @@
 
 typedef enum {
     CMD_PLAY,
+    CMD_PLAY_NOW,       // stops whatever is playing first
     CMD_SET_EFFECT,
     CMD_RECALIBRATE,
 } haptic_cmd_t;
@@ -74,7 +75,7 @@ typedef enum {
 typedef struct {
     uint8_t cmd;
     uint8_t event;    // CMD_SET_EFFECT
-    uint8_t effect;   // CMD_PLAY, CMD_SET_EFFECT
+    uint8_t effect;   // CMD_PLAY, CMD_PLAY_NOW, CMD_SET_EFFECT
 } haptic_msg_t;
 
 typedef struct {
@@ -90,6 +91,7 @@ static uint8_t s_effects[HAPTIC_EVENT_COUNT] = {
     [HAPTIC_EVENT_PRESS] = CONFIG_PM_HAPTIC_PRESS_EFFECT,
     [HAPTIC_EVENT_RELEASE] = CONFIG_PM_HAPTIC_RELEASE_EFFECT,
     [HAPTIC_EVENT_DETENT] = CONFIG_PM_HAPTIC_DETENT_EFFECT,
+    [HAPTIC_EVENT_EDGE] = CONFIG_PM_HAPTIC_EDGE_EFFECT,
 };
 
 static esp_err_t write_reg(uint8_t reg, uint8_t value)
@@ -203,6 +205,9 @@ static void haptic_task(void *arg)
             write_reg(REG_MODE, MODE_INTERNAL_TRIGGER);
             awake = true;
         }
+        if (msg.cmd == CMD_PLAY_NOW) {
+            write_reg(REG_GO, 0);
+        }
         if (msg.effect != loaded) {
             write_reg(REG_WAVESEQ1, msg.effect);
             loaded = msg.effect;
@@ -264,10 +269,14 @@ esp_err_t haptic_init(void)
         g_pm_stats.haptic_status = status;
     }
     uint8_t saved[HAPTIC_EVENT_COUNT];
-    if (load_blob(NVS_KEY_FX, saved, sizeof(saved))) {
-        for (int i = 0; i < HAPTIC_EVENT_COUNT; i++) {
-            s_effects[i] = saved[i] <= HAPTIC_EFFECT_MAX ? saved[i] : 0;
-        }
+    int count = HAPTIC_EVENT_COUNT;
+    bool have = load_blob(NVS_KEY_FX, saved, sizeof(saved));
+    if (!have) {
+        count = HAPTIC_EVENT_EDGE;    // saved before the edge effect existed
+        have = load_blob(NVS_KEY_FX, saved, count);
+    }
+    for (int i = 0; have && i < count; i++) {
+        s_effects[i] = saved[i] <= HAPTIC_EFFECT_MAX ? saved[i] : 0;
     }
 
     write_reg(REG_MODE, MODE_STANDBY);    // the task wakes it for each click
@@ -298,9 +307,16 @@ void haptic_play(uint8_t effect)
 
 void haptic_event(haptic_event_t event)
 {
-    if (event < HAPTIC_EVENT_COUNT) {
-        haptic_play(s_effects[event]);
+    if (event >= HAPTIC_EVENT_COUNT) {
+        return;
     }
+    uint8_t effect = s_effects[event];
+    if (!effect || effect > HAPTIC_EFFECT_MAX) {
+        return;
+    }
+    // The host asks for the edge a few ms after the turn's detent click
+    // started, and a GO while that still plays would be ignored.
+    post(event == HAPTIC_EVENT_EDGE ? CMD_PLAY_NOW : CMD_PLAY, 0, effect);
 }
 
 void haptic_set_effect(haptic_event_t event, uint8_t effect)
