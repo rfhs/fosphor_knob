@@ -16,7 +16,10 @@ mode (`fosphor_knob_uhd`, `fosphor_knob_bladerf`, `fosphor_knob_hackrf`,
 HackRF sweep of the whole range (`fosphor_knob_hackrf_sweep[_sponsors]`)
 only runs when started by that name. A PortaPack running Mayhem has to be
 switched to HackRF mode on its menu first; until then it isn't a HackRF to
-the computer, and `fosphor_knob.sh` says so.
+the computer, and `fosphor_knob.sh` says so. An install may leave out the
+flowgraphs of SDRs it doesn't support: autodetection then skips those SDRs,
+and a mode started by name for one of them says that its support was
+disabled when fosphor_knob was installed.
 With a bladeRF 2.0 it starts the wide flowgraph
 (`fosphor_knob_bladerf2_wide*.grc`, 122.88 MHz) when libbladeRF (2.6.0 or
 later) and gr-osmosdr support oversampling and bit packing, and the normal
@@ -146,7 +149,7 @@ skipped, unless it was asked for with `--knob`. What it runs:
 
 | Script | Knob | Checks |
 |---|---|---|
-| `python3 -m unittest discover -s tests` | none | wire formats against the firmware, knob detection, `run.py`'s LED breathing, and the flowgraphs where GNU Radio is installed; CI runs these |
+| `python3 -m unittest discover -s tests` | none | wire formats against the firmware, knob detection, `run.py`'s LED breathing and limits, `fosphor_knob.sh` with SDRs left out of the install, and the flowgraphs where GNU Radio is installed; CI runs these |
 | `firmware/tools/selftest.py` | Waveshare | USB descriptors, LED requests, readout, raw HID reports, the no-USB hint, breathing, request hardening, kernel `powermate` events |
 | `tests/runpy_test.py` | Waveshare | `run.py` end to end: turning tunes, a press steps through the presets, hold and turn sets the gain, the readout follows, the LED breathes when idle; then with an RTL-SDR's limits: tuning stops at the edge, out-of-range presets are skipped, the gain steps through the tuner's values |
 | `tests/reconnect_test.py` | Waveshare | `run.py` keeps going when the knob is unplugged and plugged back in |
