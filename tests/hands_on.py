@@ -190,6 +190,10 @@ def main():
         time.sleep(18)
         record("invitation", ask("Does the screen say THIS IS INTERACTIVE! (taking turns with the readout)?"))
         record("haptics", ask("Did you feel a click on each turn and each tap?"))
+        say("  Keep a hand on the knob: it buzzes once in 2 seconds, as when a turn hits a limit...")
+        time.sleep(2)
+        knob_display.edge()
+        record("edge buzz", ask("Did you feel a buzz, clearly different from the clicks? (needs firmware 1.6)"))
         say("7. Optional: unplug the USB-C cable (or flip the plug) for 5 seconds, then plug it back in.")
         record("no-USB message", ask("Did the screen say NO USB CONNECTION while it was unplugged?"))
 

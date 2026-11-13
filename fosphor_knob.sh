@@ -23,7 +23,8 @@ trap control_c TERM
 
 # Every mode but hackrf_sweep is tuned with the knob, so check for a usable
 # one before starting anything. hackrf_sweep sweeps the whole range and can't
-# be tuned: it runs without the knob and without run.py.
+# be tuned: it runs without the knob and without run.py, and is only started
+# by its own command name, never by autodetection.
 require_knob() {
   if ! /usr/share/fosphor_knob/run.py --check; then
     printf 'This mode is tuned with the knob: fix the problem above and start again.\n'
@@ -48,6 +49,30 @@ exec_hackrf_sweep_sponsors() {
   exec_hackrf_common
   /usr/share/fosphor_knob/fosphor_knob_hackrf_sweep_sponsors.py &
   pids="${pids} $!"
+}
+
+exec_hackrf() {
+  require_knob
+  /usr/share/fosphor_knob/fosphor_knob_hackrf.py &
+  pids=$!
+}
+
+exec_hackrf_sponsors() {
+  require_knob
+  /usr/share/fosphor_knob/fosphor_knob_hackrf_sponsors.py &
+  pids=$!
+}
+
+exec_rtlsdr() {
+  require_knob
+  /usr/share/fosphor_knob/fosphor_knob_rtlsdr.py &
+  pids=$!
+}
+
+exec_rtlsdr_sponsors() {
+  require_knob
+  /usr/share/fosphor_knob/fosphor_knob_rtlsdr_sponsors.py &
+  pids=$!
 }
 
 exec_uhd() {
@@ -128,14 +153,36 @@ exec_bladerf2_sponsors() {
 pids=""
 use_knob=0
 
+# A PortaPack running Mayhem's own firmware shows up as 1d50:6018, not as a
+# HackRF (1d50:6089), until it is switched to HackRF mode.
+no_hardware() {
+  printf 'Failed to autodetect supported hardware\n'
+  if [ -n "$(lsusb -d 1d50:6018)" ]; then
+    printf 'A PortaPack (Mayhem) was found in standalone mode: switch it to HackRF mode on its menu.\n'
+  fi
+  exit 1
+}
+
 if [ "$(basename "${0}")" = "fosphor_knob_uhd" ]; then
   exec_uhd
 elif [ "$(basename "${0}")" = "fosphor_knob_uhd_sponsors" ]; then
   exec_uhd_sponsors
+elif [ "$(basename "${0}")" = "fosphor_knob_bladerf" ] || [ "$(basename "${0}")" = "fosphor_knob_bladerf2" ]; then
+  exec_bladerf2
+elif [ "$(basename "${0}")" = "fosphor_knob_bladerf_sponsors" ] || [ "$(basename "${0}")" = "fosphor_knob_bladerf2_sponsors" ]; then
+  exec_bladerf2_sponsors
+elif [ "$(basename "${0}")" = "fosphor_knob_hackrf" ]; then
+  exec_hackrf
+elif [ "$(basename "${0}")" = "fosphor_knob_hackrf_sponsors" ]; then
+  exec_hackrf_sponsors
 elif [ "$(basename "${0}")" = "fosphor_knob_hackrf_sweep" ]; then
   exec_hackrf_sweep
 elif [ "$(basename "${0}")" = "fosphor_knob_hackrf_sweep_sponsors" ]; then
   exec_hackrf_sweep_sponsors
+elif [ "$(basename "${0}")" = "fosphor_knob_rtlsdr" ]; then
+  exec_rtlsdr
+elif [ "$(basename "${0}")" = "fosphor_knob_rtlsdr_sponsors" ]; then
+  exec_rtlsdr_sponsors
 elif [ "$(basename "${0}")" = "fosphor_knob_sponsors" ]; then
   # XXX rewrite these lsusb to be correct for busybox too
   if [ -n "$(lsusb -d 2500:0022)" ]; then
@@ -143,10 +190,11 @@ elif [ "$(basename "${0}")" = "fosphor_knob_sponsors" ]; then
   elif [ -n "$(lsusb -d 2cf0:5250)" ]; then
     exec_bladerf2_sponsors
   elif [ -n "$(lsusb -d 1d50:6089)" ]; then
-    exec_hackrf_sweep_sponsors
+    exec_hackrf_sponsors
+  elif [ -n "$(lsusb -d 0bda:2838)" ] || [ -n "$(lsusb -d 0bda:2832)" ]; then
+    exec_rtlsdr_sponsors
   else
-    printf 'Failed to autodetect supported hardware\n'
-    exit 1
+    no_hardware
   fi
 else
   if [ -n "$(lsusb -d 2500:0022)" ]; then
@@ -154,10 +202,11 @@ else
   elif [ -n "$(lsusb -d 2cf0:5250)" ]; then
     exec_bladerf2
   elif [ -n "$(lsusb -d 1d50:6089)" ]; then
-    exec_hackrf_sweep
+    exec_hackrf
+  elif [ -n "$(lsusb -d 0bda:2838)" ] || [ -n "$(lsusb -d 0bda:2832)" ]; then
+    exec_rtlsdr
   else
-    printf 'Failed to autodetect supported hardware\n'
-    exit 1
+    no_hardware
   fi
 fi
 

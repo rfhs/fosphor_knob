@@ -13,6 +13,7 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest import mock
 import xmlrpc.client
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -22,6 +23,7 @@ sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(REPO, "firmware", "tools"))
 
 import fake_flowgraph  # noqa: E402
+import sdr_limits  # noqa: E402
 import knob_display  # noqa: E402
 import powermate  # noqa: E402
 import run  # noqa: E402
@@ -212,6 +214,141 @@ class IdleBreathing(unittest.TestCase):
         pm._idle_tick()
         self.feed(pm, powermate.Event(0, 0, powermate.EV_MSC, powermate.MSC_PULSELED, 0))
         self.assertEqual(len(pm.sent), 1, "EV_MSC (our own LED writes) must not stop the breathing")
+
+
+class SdrLimits(unittest.TestCase):
+    def test_hackrf_ladder_maps_to_real_stage_gains(self):
+        for gain in sdr_limits.HACKRF_GAINS:
+            lna, vga = sdr_limits.hackrf_split(gain)
+            self.assertEqual(lna + vga, gain)
+            self.assertEqual(lna % sdr_limits.HACKRF_LNA_STEP, 0)
+            self.assertLessEqual(lna, sdr_limits.HACKRF_LNA_MAX)
+            self.assertEqual(vga % sdr_limits.HACKRF_VGA_STEP, 0)
+            self.assertLessEqual(vga, sdr_limits.HACKRF_VGA_MAX)
+        self.assertEqual(sdr_limits.HACKRF_GAINS[-1], 102)
+        self.assertEqual(sdr_limits.hackrf_split(-3), (0, 0))
+        self.assertEqual(sdr_limits.hackrf_split(500), (40, 62))
+
+    def test_capture_stays_inside_the_range(self):
+        limits = fake_flowgraph.knob_limits("uhd")
+        self.assertEqual((limits["freq_min"], limits["freq_max"]), (70e6, 5980e6))
+        self.assertEqual(limits["gain_values"], [])
+
+    def test_discrete_gains(self):
+        limits = fake_flowgraph.knob_limits("rtlsdr")
+        self.assertEqual(limits["gain_values"], [float(g) for g in fake_flowgraph.R820T_GAINS])
+        self.assertEqual((limits["gain_min"], limits["gain_max"]), (0, 49.6))
+
+    def test_not_ready_and_errors(self):
+        self.assertEqual(sdr_limits.describe(None, 1e6), {})
+
+        class Broken:
+            def get_freq_range(self, chan=0):
+                raise RuntimeError("no device")
+        self.assertIn("no device", sdr_limits.describe(Broken(), 1e6)["error"])
+        too_wide = fake_flowgraph.FakeSource("rtlsdr")
+        too_wide.samp_rate = 2e9
+        self.assertIn("wider", sdr_limits.describe(too_wide, 2e9)["error"])
+
+
+class KnobLimits(unittest.TestCase):
+    """run.py keeps the knob inside what the flowgraph says the SDR can do."""
+
+    def setUp(self):
+        self.saved = (run.limits, run.limitsStale, run.currentFreq, run.currentGain, run.pos)
+        self.edge = mock.patch.object(run.knob_display, "edge").start()
+        mock.patch.object(run.knob_display, "show").start()
+        self.addCleanup(mock.patch.stopall)
+
+    def tearDown(self):
+        run.limits, run.limitsStale, run.currentFreq, run.currentGain, run.pos = self.saved
+
+    def serve(self, **kwargs):
+        fg = fake_flowgraph.FakeFlowgraph(**kwargs)
+        server = fake_flowgraph.serve(fg, port=0)
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        url = "http://127.0.0.1:%d" % server.server_address[1]
+        mock.patch.object(run.xmlrpc.client, "Server", lambda _: xmlrpc.client.ServerProxy(url)).start()
+        return fg
+
+    def test_helpers(self):
+        rtl = fake_flowgraph.knob_limits("rtlsdr")
+        self.assertEqual(run.clampFreq(2400e6, rtl), 1764800000)
+        self.assertEqual(run.clampFreq(10e6, rtl), 25200000)
+        self.assertEqual(run.clampFreq(10e6, None), 10e6)
+        self.assertEqual(run.snapGain(30, rtl), 29.7)
+        self.assertEqual(run.nextGain(28, 1, rtl), 29.7)
+        self.assertEqual(run.nextGain(29.7, 1, rtl), 32.8)
+        self.assertEqual(run.nextGain(29.7, -1, rtl), 28)
+        self.assertIsNone(run.nextGain(49.6, 1, rtl))
+        self.assertIsNone(run.nextGain(0, -1, rtl))
+        blade = fake_flowgraph.knob_limits("bladerf2")
+        self.assertEqual(run.nextGain(-14, -1, blade), -15)
+        self.assertIsNone(run.nextGain(60, 1, blade))
+        self.assertEqual(run.nextGain(76, -1, blade), 60, "outside the range: back inside")
+        self.assertEqual(run.nextGain(75, 1, None), 76)
+        self.assertIsNone(run.nextGain(76, 1, None))
+
+    def test_presets_the_sdr_cant_reach_are_skipped(self):
+        presets = [915, 1950, 2134, 2424, 5160, 140, 433]
+        rtl = fake_flowgraph.knob_limits("rtlsdr")
+        self.assertEqual(run.nextPreset(0, presets, rtl), (5, 140000000))
+        self.assertEqual(run.nextPreset(6, presets, rtl), (0, 915000000))
+        self.assertEqual(run.nextPreset(0, presets, None), (1, 1950000000))
+        self.assertIsNone(run.nextPreset(0, [5160], rtl))
+
+    def test_simulator_limits(self):
+        fake = fake_flowgraph.knob_limits("fake")
+        self.assertEqual((fake["freq_min"], fake["freq_max"]), (130e6, 2440e6))
+        self.assertEqual(run.nextPreset(3, run.presets, fake), (5, 140000000))
+        self.assertEqual(run.clampFreq(2424e6 + 17e6, fake), 2440e6)
+        self.assertEqual(run.clampFreq(140e6 - 11e6, fake), 130e6)
+        self.assertEqual(run.nextGain(30, 1, fake), 31)
+        self.assertEqual(run.nextGain(33, 1, fake), 37.5)
+        self.assertEqual(run.nextGain(0, -1, fake), -1)
+        self.assertIsNone(run.nextGain(-3, -1, fake))
+
+    def test_fault_means_no_limits(self):
+        self.serve()
+        self.assertIsNone(run.fetchLimits())
+
+    def test_waits_while_the_sdr_opens(self):
+        fg = self.serve(like="uhd", opening=2)
+        self.assertEqual(run.fetchLimits()["freq_max"], 5980e6)
+        self.assertEqual(fg.opening, 0)
+
+    def test_start_inside_the_limits(self):
+        fg = self.serve(freq=2424e6, gain=30, like="rtlsdr")
+        run.currentFreq, run.currentGain = 2424000000, 30.0
+        run.refreshLimits()
+        self.assertEqual(fg.take(), [("freq", 1764800000), ("gain", 29)])     # take() records ints
+        self.assertEqual(fg.gain, 29.7)
+
+    def test_turning_past_an_edge_sends_nothing_and_bumps(self):
+        fg = self.serve(like="rtlsdr")
+        run.limits = fake_flowgraph.knob_limits("rtlsdr")
+        run.currentFreq, run.currentGain = 1764800000, 49.6
+        run.incfreq()
+        run.incGain()
+        self.assertEqual(fg.take(), [])
+        self.assertEqual(self.edge.call_count, 2)
+        run.decGain()
+        self.assertEqual(fg.gain, 48)
+        run.decfreq()
+        self.assertEqual(fg.freq, 1763800000)
+
+    def test_gain_limits_are_asked_again_after_tuning(self):
+        fg = self.serve(like="bladerf2")
+        run.limits = fake_flowgraph.knob_limits("bladerf2")
+        run.currentFreq, run.currentGain = 915000000, 20.0
+        run.incfreq()
+        self.assertTrue(run.limitsStale)
+        fg.like = "rtlsdr"      # as if the gain range changed with the band
+        run.incGain()
+        self.assertFalse(run.limitsStale)
+        self.assertEqual(run.limits["gain_max"], 49.6)
+        self.assertEqual(fg.gain, 20.7, "snapped to 19.7, then one step up")
 
 
 if __name__ == "__main__":

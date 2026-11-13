@@ -8,7 +8,9 @@ the kernel powermate driver, injects turns and presses over USB and checks:
   - run.py tunes the "radio" the way it would with a Griffin PowerMate,
   - the knob's screen shows the radio's frequency and gain,
   - the LED breathes while the knob is idle and is steady while in use (the
-    knob's own attract mode; run.py leaves the emulator's LED alone).
+    knob's own attract mode; run.py leaves the emulator's LED alone),
+  - with the limits an RTL-SDR reports: tuning stops at the edge, presets it
+    can't reach are skipped and the gain steps through its real values.
 
 A real Griffin can stay plugged in: run.py is pointed at the knob's own event
 device. Needs read/write access to that /dev/input/event* node.
@@ -131,10 +133,67 @@ def main():
             out, _ = proc.communicate()
         server.shutdown()
         server.server_close()
+    if not failures:
+        out = limits_pass(dev, node, check)
     if failures:
         print("\nrun.py output:\n" + out)
     print("\n%s" % ("all checks passed" if failures == 0 else "%d check(s) FAILED" % failures))
     sys.exit(1 if failures else 0)
+
+
+def limits_pass(dev, node, check):
+    """run.py against a flowgraph that publishes an RTL-SDR's limits; returns run.py's output."""
+    fg = fake_flowgraph.FakeFlowgraph(freq=1760e6, gain=30, like="rtlsdr")
+    server = fake_flowgraph.serve(fg)
+    limits = fake_flowgraph.knob_limits("rtlsdr")
+    proc = subprocess.Popen([sys.executable, os.path.join(REPO, "run.py"), node], cwd=REPO,
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+
+    def inject(rotate=0, button=None):
+        selftest.inject(dev, rotate=rotate, button=button)
+
+    try:
+        time.sleep(2.5)
+        print("\nrun.py with an RTL-SDR's limits")
+        check(fg.take() == [("gain", 29)] and fg.gain == 29.7, "starts on a gain the SDR has: 30 -> 29.7 dB")
+
+        inject(rotate=10)
+        time.sleep(0.8)
+        calls = fg.take()
+        top = int(limits["freq_max"])
+        check(calls == [("freq", f) for f in (1761000000, 1762000000, 1763000000, 1764000000, top)],
+              "10 clicks up from 1760 MHz stop at %.1f MHz (%s)" % (top / 1e6, calls))
+        shown = pmknob.read_display(dev)
+        check(shown["freq_hz"] == top, "the screen shows the edge, %.1f MHz" % (shown["freq_hz"] / 1e6))
+
+        inject(button=True)
+        time.sleep(0.15)
+        inject(button=False)
+        time.sleep(0.5)
+        calls = fg.take()
+        check(calls == [("freq", 140000000)], "a press skips 1950-5160 MHz: 140 MHz (%s)" % calls)
+
+        inject(button=True)
+        time.sleep(0.1)
+        inject(rotate=2)
+        time.sleep(0.4)
+        inject(button=False)
+        time.sleep(0.4)
+        fg.take()
+        check(fg.gain == 33.8, "hold + 2 clicks: 29.7 -> 32.8 -> 33.8 dB (%s)" % fg.gain)
+        shown = pmknob.read_display(dev)
+        check((shown["gain_db"], shown["gain_min"], shown["gain_max"]) == (33.8, 0, 49.6),
+              "the screen shows 33.8 dB on the SDR's 0-49.6 dB arc (%s)" % shown)
+    finally:
+        proc.terminate()
+        try:
+            out, _ = proc.communicate(timeout=3)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            out, _ = proc.communicate()
+        server.shutdown()
+        server.server_close()
+    return out
 
 
 if __name__ == "__main__":

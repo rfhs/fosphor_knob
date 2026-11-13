@@ -6,15 +6,50 @@
 
 ## Flowgraphs
 
-`fosphor_knob.sh` starts the flowgraph for the SDR it finds: a USRP
-(`fosphor_knob_uhd`), a bladeRF 2.0 (`fosphor_knob_bladerf2`) or a HackRF
-(`fosphor_knob_hackrf_sweep`, which sweeps the whole range). Started as
-`fosphor_knob_sponsors`, it runs the variants that also show the sponsors.
+`fosphor_knob.sh` starts the flowgraph for the SDR it finds, in this order:
+a USRP (`fosphor_knob_uhd`), a bladeRF 2.0 (`fosphor_knob_bladerf2`), a
+HackRF (`fosphor_knob_hackrf`, 20 MHz wide) or an RTL-SDR
+(`fosphor_knob_rtlsdr`, 2.4 MHz wide). Started as `fosphor_knob_sponsors`,
+it runs the variants that also show the sponsors. Started by the name of a
+mode (`fosphor_knob_uhd`, `fosphor_knob_bladerf`, `fosphor_knob_hackrf`,
+`fosphor_knob_rtlsdr`, each also with `_sponsors`), it runs that one. The
+HackRF sweep of the whole range (`fosphor_knob_hackrf_sweep[_sponsors]`)
+only runs when started by that name. A PortaPack running Mayhem has to be
+switched to HackRF mode on its menu first; until then it isn't a HackRF to
+the computer, and `fosphor_knob.sh` says so.
 With a bladeRF 2.0 it starts the wide flowgraph
 (`fosphor_knob_bladerf2_wide*.grc`, 122.88 MHz) when libbladeRF (2.6.0 or
 later) and gr-osmosdr support oversampling and bit packing, and the normal
 one (61.44 MHz) otherwise; it says which one it started. The flowgraphs take
 their tuning over XML-RPC on 127.0.0.1:8080, from this machine only.
+
+### Limits
+
+Each tuned flowgraph asks its SDR what it can do (`sdr_limits.py`, installed
+next to the flowgraphs) and offers that to `run.py` as `get_knob_limits()`:
+
+* the centre frequency stays half the capture width inside the SDR's range,
+  so the whole display is always inside it,
+* the gain stays inside the SDR's range and steps through the values it
+  really has (an RTL-SDR's tuner has 29 uneven ones),
+* a short press skips the presets the SDR can't reach.
+
+A turn past a limit changes nothing, and the Waveshare knob buzzes (firmware
+1.6 or later). What the SDRs tested so far report:
+
+| SDR | Range | Centre (capture) | Gain |
+|---|---|---|---|
+| USRP B205-mini | 42–6008 MHz | 70–5980 MHz (56 MHz) | 0–76 dB, 1 dB steps |
+| bladeRF 2.0 micro | 70–6000 MHz | 100.72–5969.28 MHz (61.44 MHz), 131.44–5938.56 MHz (122.88 MHz) | −15–60 dB, 1 dB steps |
+| HackRF One | 4–7246 MHz | 14–7236 MHz (20 MHz) | 0–102 dB in 2 dB steps (see below) |
+| RTL-SDR (R820T) | 24–1766 MHz | 25.2–1764.8 MHz (2.4 MHz) | 29 values, 0–49.6 dB |
+
+The HackRF's own overall gain is only its RF amp (0 or 14 dB). Its flowgraph
+leaves the amp off and turns the knob's gain into the LNA (0–40 dB, 8 dB
+steps) and VGA (0–62 dB, 2 dB steps): as many whole LNA steps as fit, the
+rest on the VGA. The bladeRF's gain range may depend on the band, so
+`run.py` asks for the limits again after tuning, before it changes the
+gain. `tests/sdr_ranges.py` shows what a plugged-in SDR reports.
 
 `tests/test_flowgraphs.py` compiles every flowgraph with grcc and imports the
 generated scripts, which needs GNU Radio with gr-osmosdr, gr-fosphor and
@@ -83,7 +118,7 @@ At the top of `run.py`:
 |---|---|---|
 | `presets` | 915, 1950, 2134, 2424, 5160, 140, 433 | MHz, in the order a short press steps through them |
 | `step` | 1000000 | Hz per click |
-| `minGain`, `maxGain` | 0, 76 | gain range for push and turn, in dB |
+| `minGain`, `maxGain` | 0, 76 | gain range for push and turn, in dB, with a flowgraph that doesn't report the SDR's limits |
 | `idleSeconds` | 1 | a Griffin's LED breathes after this many seconds unused; `FOSPHOR_KNOB_IDLE_SECONDS` overrides it |
 | `targetip` | 127.0.0.1 | where the flowgraph's XML-RPC server listens (port 8080) |
 
@@ -113,7 +148,7 @@ skipped, unless it was asked for with `--knob`. What it runs:
 |---|---|---|
 | `python3 -m unittest discover -s tests` | none | wire formats against the firmware, knob detection, `run.py`'s LED breathing, and the flowgraphs where GNU Radio is installed; CI runs these |
 | `firmware/tools/selftest.py` | Waveshare | USB descriptors, LED requests, readout, raw HID reports, the no-USB hint, breathing, request hardening, kernel `powermate` events |
-| `tests/runpy_test.py` | Waveshare | `run.py` end to end: turning tunes, a press steps through the presets, hold and turn sets the gain, the readout follows, the LED breathes when idle |
+| `tests/runpy_test.py` | Waveshare | `run.py` end to end: turning tunes, a press steps through the presets, hold and turn sets the gain, the readout follows, the LED breathes when idle; then with an RTL-SDR's limits: tuning stops at the edge, out-of-range presets are skipped, the gain steps through the tuner's values |
 | `tests/reconnect_test.py` | Waveshare | `run.py` keeps going when the knob is unplugged and plugged back in |
 | `tests/griffin_test.py` | Griffin | USB descriptors (the same as the emulator's), kernel driver and input capabilities, LED writes |
 
@@ -142,6 +177,12 @@ With only one knob plugged in `--knob` can be left out.
 * `tests/knobs.py` — which knobs are plugged in, on which event node.
 * `tests/fake_flowgraph.py` — stands in for the flowgraph's XML-RPC port, so
   `run.py` can be tried with either knob and no SDR.
+* `tests/sdr_ranges.py` — asks each plugged-in SDR for its frequency and
+  gain range, opened the way its flowgraph opens it, and shows the knob's
+  limits for each of its flowgraphs and which presets would be skipped;
+  `--repeat N` checks the answers stay the same, `--gain-across-band` tunes
+  it to each preset and near both ends and reads the gain range there. Stop
+  `fosphor_knob.sh` first.
 * `firmware/tools/pmknob.py` — status and test requests for the Waveshare
   knob (`pmknob.py info`, `touches --watch`, …); see the firmware README.
 

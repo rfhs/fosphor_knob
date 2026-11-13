@@ -25,6 +25,7 @@ VENDOR_OUT = 0x40           # bmRequestType: vendor, to the device
 VENDOR_IN = 0xC0            # bmRequestType: vendor, from the device
 REQ_INFO = 0xF1             # see firmware/main/usb_powermate.h
 REQ_DISPLAY = 0xF7
+REQ_EDGE = 0xFF
 DISPLAY_VERSION = 1
 DISPLAY_VALID = 0x01
 DISPLAY_NO_GAIN = 0x02
@@ -175,6 +176,17 @@ def show(freq_hz, gain_db, gain_min=0, gain_max=76):
         _publish(_message(freq_hz, gain_db, gain_min, gain_max, True))
     except Exception:
         pass
+
+
+def edge():
+    """Buzz the knob: a turn hit a tuning or gain limit. Only knobs that
+    show() has found are asked; firmware older than 1.6 refuses, which is
+    ignored."""
+    for fd in list(_knobs.values()):
+        try:
+            _control(fd, VENDOR_OUT, REQ_EDGE, ctypes.create_string_buffer(0))
+        except Exception:
+            pass
 
 
 def clear():

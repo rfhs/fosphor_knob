@@ -2,6 +2,7 @@
 from powermate import PowerMateBase, LedEvent, MAX_BRIGHTNESS, PUSH, ROTATE
 import knob_display
 import glob
+import math
 import os
 import sys
 import threading
@@ -21,8 +22,15 @@ pos = 0
 currentFreq = -1
 step = 1000000
 currentGain = -1
+# Used when the flowgraph doesn't publish the SDR's limits (get_knob_limits).
 minGain = 0
 maxGain = 76
+
+# What the flowgraph says the knob may do (sdr_limits.describe()), or None.
+limits = None
+# The SDR's gain range can change with the band, so it is asked again after
+# tuning, before the gain is changed.
+limitsStale = False
 
 # A Griffin's LED breathes to attract visitors after this many seconds
 # without use, and goes steady as soon as it is used. The Waveshare knob's
@@ -30,11 +38,21 @@ maxGain = 76
 idleSeconds = float(os.environ.get('FOSPHOR_KNOB_IDLE_SECONDS', 1))
 
 
+def gainRange():
+    if limits:
+        return limits['gain_min'], limits['gain_max']
+    return minGain, maxGain
+
+
+def showReadout():
+    knob_display.show(currentFreq, currentGain, *gainRange())
+
+
 def setFreq(freq1):
     freq = float(freq1)
     xml = xmlrpc.client.Server('http://' + targetip + ':8080')
     xml.set_freq(freq)
-    knob_display.show(freq, currentGain, minGain, maxGain)
+    knob_display.show(freq, currentGain, *gainRange())
 
 
 def getFreq():
@@ -48,7 +66,7 @@ def getGain():
     global currentGain
     xml = xmlrpc.client.Server('http://' + targetip + ':8080')
     try:
-        currentGain = int(xml.get_gain())
+        currentGain = float(xml.get_gain())
         print("Found gain %s" % currentGain)
     except xmlrpc.client.Fault:
         # the hackrf_sweep flowgraphs have no gain control
@@ -57,60 +75,145 @@ def getGain():
 
 
 def setGain(gain1):
-    gain = int(gain1)
+    gain = float(gain1)
     xml = xmlrpc.client.Server('http://' + targetip + ':8080')
-    xml.set_gain(float(gain))
-    knob_display.show(currentFreq, gain, minGain, maxGain)
+    xml.set_gain(gain)
+    knob_display.show(currentFreq, gain, *gainRange())
+
+
+def clampFreq(freq, limits):
+    """freq (Hz) moved inside the limits, on whole Hz."""
+    if not limits:
+        return freq
+    return min(max(freq, math.ceil(limits['freq_min'])), math.floor(limits['freq_max']))
+
+
+def snapGain(gain, limits):
+    """The gain the SDR can really do nearest to gain."""
+    if not limits:
+        return gain
+    if limits.get('gain_values'):
+        return min(limits['gain_values'], key=lambda v: abs(v - gain))
+    return min(max(gain, limits['gain_min']), limits['gain_max'])
+
+
+def nextGain(gain, direction, limits):
+    """The gain one click up (direction 1) or down (-1), or None at the edge."""
+    if limits and limits.get('gain_values'):
+        if direction > 0:
+            higher = [v for v in limits['gain_values'] if v > gain + 1e-6]
+            return min(higher) if higher else None
+        lower = [v for v in limits['gain_values'] if v < gain - 1e-6]
+        return max(lower) if lower else None
+    low, high = (limits['gain_min'], limits['gain_max']) if limits else (minGain, maxGain)
+    step = max(limits.get('gain_step', 0), 1) if limits else 1
+    new = min(max(gain + direction * step, low), high)
+    return None if new == gain else new
+
+
+def nextPreset(pos, presets, limits):
+    """(index, Hz) of the next preset after pos that the SDR can tune to,
+    or None when it can't tune to any."""
+    for i in range(1, len(presets) + 1):
+        p = (pos + i) % len(presets)
+        freq = presets[p] * 1000000
+        if not limits or limits['freq_min'] <= freq <= limits['freq_max']:
+            return p, freq
+    return None
+
+
+def fetchLimits(wait=30):
+    """Ask the flowgraph what the knob may do: a dict, or None when it
+    can't say (an older flowgraph, or the driver couldn't tell)."""
+    xml = xmlrpc.client.Server('http://' + targetip + ':8080')
+    deadline = time.time() + wait
+    while True:
+        try:
+            got = xml.get_knob_limits()
+        except xmlrpc.client.Fault:
+            return None
+        if got.get('error'):
+            print("The SDR's limits are unknown (%s): no limits" % got['error'])
+            return None
+        if got:
+            return got
+        # {}: the flowgraph is still opening the SDR
+        if time.time() > deadline:
+            print("The flowgraph didn't tell the SDR's limits within %d s: no limits" % wait)
+            return None
+        time.sleep(0.2)
+
+
+def refreshLimits():
+    """Ask for the limits again and bring the frequency and gain inside them."""
+    global limits, limitsStale, currentFreq, currentGain
+    limits = fetchLimits()
+    limitsStale = False
+    if limits is None:
+        return
+    freq = clampFreq(currentFreq, limits)
+    if freq != currentFreq:
+        currentFreq = freq
+        setFreq(freq)
+    if currentGain is not None:
+        gain = snapGain(currentGain, limits)
+        if gain != currentGain:
+            currentGain = gain
+            setGain(gain)
+
+
+def changeGain(direction):
+    global currentGain
+    if currentGain is None:
+        return
+    if limitsStale:
+        refreshLimits()
+    gain = nextGain(currentGain, direction, limits)
+    if gain is None:
+        knob_display.edge()
+        return
+    currentGain = gain
+    print("setting Gain %s" % currentGain)
+    setGain(currentGain)
 
 
 def incGain():
-    global currentGain
-    if currentGain is None:
-        return
-    currentGain += 1
-    if currentGain > maxGain:
-        currentGain = maxGain
-    print("setting Gain %s" % currentGain)
-    setGain(currentGain)
+    changeGain(1)
 
 
 def decGain():
-    global currentGain
-    if currentGain is None:
+    changeGain(-1)
+
+
+def tune(freq):
+    global currentFreq, limitsStale
+    freq = clampFreq(freq, limits)
+    if freq == currentFreq:
+        knob_display.edge()
         return
-    currentGain -= 1
-    if currentGain < minGain:
-        currentGain = minGain
-    print("setting Gain %s" % currentGain)
-    setGain(currentGain)
+    currentFreq = freq
+    limitsStale = limits is not None
+    print("setting freq %s" % currentFreq)
+    setFreq(currentFreq)
 
 
 def incfreq():
-    global currentFreq
-    currentFreq += step
-    print("setting freq %s" % currentFreq)
-    setFreq(currentFreq)
+    tune(currentFreq + step)
 
 
 def decfreq():
-    global currentFreq
-    currentFreq -= step
-    print("setting freq %s" % currentFreq)
-    setFreq(currentFreq)
+    tune(currentFreq - step)
 
 
 def preset():
-    global pos
-    global currentFreq
-
-    pos += 1
-
-    if pos >= len(presets):
-        pos = 0
-
-    preset_freq = presets[pos]
-    currentFreq = preset_freq*1000000
-    setFreq(preset_freq*1000000)
+    global pos, currentFreq, limitsStale
+    found = nextPreset(pos, presets, limits)
+    if found is None:
+        knob_display.edge()
+        return
+    pos, currentFreq = found
+    limitsStale = limits is not None
+    setFreq(currentFreq)
 
 
 def wait_for_getFreq():
@@ -203,7 +306,11 @@ class ExamplePowerMate(PowerMateBase):
     def __init__(self, path):
         wait_for_getFreq()
         getGain()
-        knob_display.show(currentFreq, currentGain, minGain, maxGain)
+        refreshLimits()
+        if limits:
+            print("Limits: %.3f to %.3f MHz, gain %g to %g dB" % (
+                limits['freq_min'] / 1e6, limits['freq_max'] / 1e6, limits['gain_min'], limits['gain_max']))
+        showReadout()
         # LED state, shared by the event thread and the idle thread; both send
         # their LED events under _lock so one can't overtake the other. It is
         # set up before super().__init__(), which starts the event thread.

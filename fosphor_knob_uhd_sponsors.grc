@@ -636,6 +636,23 @@ blocks:
     coordinate: [32, 260]
     rotation: 0
     state: enabled
+- name: snippet_0
+  id: snippet
+  parameters:
+    alias: ''
+    code: |-
+      import sdr_limits
+      self.get_knob_limits = lambda: sdr_limits.describe(getattr(self, 'uhd_usrp_source_0', None), self.samp_rate)
+    comment: ''
+    priority: '0'
+    section: init_before_blocks
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [640, 12]
+    rotation: 0
+    state: enabled
 - name: xmlrpc_server_0
   id: xmlrpc_server
   parameters:
