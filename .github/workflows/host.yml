@@ -39,7 +39,7 @@ jobs:
         run: python tests/run_all.py --no-hardware
 
       - name: shellcheck
-        run: shellcheck fosphor_knob.sh nosleep.sh firmware/secondary/flash.sh
+        run: shellcheck fosphor_knob.sh nosleep.sh tests/simulator.sh firmware/secondary/flash.sh
 
       - name: udev rules
         run: udevadm verify udev/*.rules

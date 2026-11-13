@@ -7,8 +7,8 @@ for whichever knobs are plugged in.
     tests/run_all.py --knob griffin     unit tests + the Griffin only
     tests/run_all.py --no-hardware      unit tests only (what CI runs)
 
-Waveshare knob: firmware/tools/selftest.py, tests/runpy_test.py and
-tests/reconnect_test.py (about 30 s). Griffin: tests/griffin_test.py.
+Waveshare knob: firmware/tools/selftest.py, tests/runpy_test.py,
+tests/reconnect_test.py and tests/simulator_test.py (about 35 s). Griffin: tests/griffin_test.py.
 A knob that isn't plugged in is skipped, not failed, unless asked for with
 --knob. Stop fosphor_knob.sh / run.py first: the run.py tests start their
 own against a fake flowgraph on port 8080, and are skipped while run.py is
@@ -36,13 +36,14 @@ SUITES = {
         ("Waveshare knob self-test", [sys.executable, "firmware/tools/selftest.py"]),
         ("run.py with the Waveshare knob", [sys.executable, "tests/runpy_test.py"]),
         ("run.py reconnecting to the Waveshare knob", [sys.executable, "tests/reconnect_test.py"]),
+        ("tests/simulator.sh with the Waveshare knob", [sys.executable, "tests/simulator_test.py"]),
     ],
     knobs.GRIFFIN: [
         ("Griffin PowerMate checks", [sys.executable, "tests/griffin_test.py"]),
     ],
 }
 # these start their own run.py and fake flowgraph
-RUNPY_TESTS = ("tests/runpy_test.py", "tests/reconnect_test.py")
+RUNPY_TESTS = ("tests/runpy_test.py", "tests/reconnect_test.py", "tests/simulator_test.py")
 
 
 def run_py_running():

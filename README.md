@@ -140,7 +140,7 @@ tests/run_all.py --knob griffin     # unit tests + the Griffin only
 tests/run_all.py --no-hardware      # unit tests only, as CI runs them
 ```
 
-It takes about 30 seconds with both knobs and ends with a summary; the exit
+It takes about 35 seconds with both knobs and ends with a summary; the exit
 status is non-zero if anything failed. A knob that isn't plugged in is
 skipped, unless it was asked for with `--knob`. What it runs:
 
@@ -150,11 +150,34 @@ skipped, unless it was asked for with `--knob`. What it runs:
 | `firmware/tools/selftest.py` | Waveshare | USB descriptors, LED requests, readout, raw HID reports, the no-USB hint, breathing, request hardening, kernel `powermate` events |
 | `tests/runpy_test.py` | Waveshare | `run.py` end to end: turning tunes, a press steps through the presets, hold and turn sets the gain, the readout follows, the LED breathes when idle; then with an RTL-SDR's limits: tuning stops at the edge, out-of-range presets are skipped, the gain steps through the tuner's values |
 | `tests/reconnect_test.py` | Waveshare | `run.py` keeps going when the knob is unplugged and plugged back in |
+| `tests/simulator_test.py` | Waveshare | `tests/simulator.sh` starts the fake flowgraph and `run.py`, the knob tunes it within the made-up limits (a preset skipped, an uneven gain step), Ctrl-C stops both |
 | `tests/griffin_test.py` | Griffin | USB descriptors (the same as the emulator's), kernel driver and input capabilities, LED writes |
 
 The Waveshare tests turn and press the knob with test requests, so no hands
 are needed. A Griffin can't be turned that way: its turning, pressing and
 LED are checked by hand, below.
+
+### Trying a knob without an SDR
+
+```sh
+tests/simulator.sh                          # the only knob plugged in, made-up limits
+tests/simulator.sh --freq 2424e6 --gain 40  # where the fake radio starts
+tests/simulator.sh --like rtlsdr            # with the limits an RTL-SDR reports
+tests/simulator.sh --like none              # no limits, as with an older flowgraph
+tests/simulator.sh /dev/input/eventN        # pick a knob (tests/knobs.py lists them)
+```
+
+It starts `tests/fake_flowgraph.py` in place of the flowgraph and `run.py`
+on the knob, and prints every frequency and gain the knob sets: turn to
+tune, press for the next preset, hold and turn for the gain. By default the
+fake radio has made-up limits that are quick to reach: the centre stays
+within 130–2440 MHz (16 clicks above the 2424 MHz preset, 10 below 140 MHz),
+5160 MHz is skipped, and the gain runs from −3 to 55 dB in a mix of 1 dB
+steps and uneven jumps (… 30, 31, 32, 33, 37.5, 44.1, 45.1 …). `--like uhd`,
+`bladerf2`, `hackrf` or `rtlsdr` makes it report the limits that SDR
+reported instead (see [Limits](#limits)). At an edge the knob stops and
+buzzes. Ctrl-C stops both. Stop `fosphor_knob.sh` first; both need port
+8080.
 
 ### By hand, for both knobs
 
@@ -176,19 +199,23 @@ With only one knob plugged in `--knob` can be left out.
 
 * `tests/knobs.py` — which knobs are plugged in, on which event node.
 * `tests/fake_flowgraph.py` — stands in for the flowgraph's XML-RPC port, so
-  `run.py` can be tried with either knob and no SDR.
+  `run.py` can be tried with either knob and no SDR; `tests/simulator.sh`
+  starts both.
 * `tests/sdr_ranges.py` — asks each plugged-in SDR for its frequency and
   gain range, opened the way its flowgraph opens it, and shows the knob's
   limits for each of its flowgraphs and which presets would be skipped;
   `--repeat N` checks the answers stay the same, `--gain-across-band` tunes
   it to each preset and near both ends and reads the gain range there. Stop
   `fosphor_knob.sh` first.
+* `tests/uhd_startup_test.py` — with a USRP: checks that `run.py` can talk
+  to the UHD flowgraph while it is still opening the USRP (over a minute
+  when UHD loads the firmware after a replug); replug it first for a cold start.
 * `firmware/tools/pmknob.py` — status and test requests for the Waveshare
   knob (`pmknob.py info`, `touches --watch`, …); see the firmware README.
 
 CI (`.github/workflows/host.yml`) runs the unit tests, compiles every
-script, runs shellcheck on `fosphor_knob.sh`, `nosleep.sh` and
-`firmware/secondary/flash.sh` and checks the udev rules.
+script, runs shellcheck on `fosphor_knob.sh`, `nosleep.sh`, `tests/simulator.sh`
+and `firmware/secondary/flash.sh` and checks the udev rules.
 `.github/workflows/firmware.yml` builds the firmware, and
 `.github/workflows/flowgraphs.yml` checks the flowgraphs (see
 [Flowgraphs](#flowgraphs)).
